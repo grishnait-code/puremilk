@@ -6,6 +6,7 @@ import Enterprises from "./pages/Enterprises";
 import Enterprise from "./pages/Enterprise";
 import Audits from "./pages/Audits";
 import Analytics from "./pages/Analytics";
+import GradeStandards from "./pages/GradeStandards";
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
         <Route path="/enterprise/:id" element={<Enterprise />} />
         <Route path="/audits" element={<Audits />} />
         <Route path="/analytics" element={<Analytics />} />
+        <Route path="/grade-standards" element={<GradeStandards />} />
       </Routes>
     </div>
   );

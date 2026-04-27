@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func
+from sqlalchemy import func, text, select
 from typing import Optional
 from datetime import date
 from app.database import get_db
@@ -9,102 +9,24 @@ from app import models, schemas
 router = APIRouter(prefix="/deliveries", tags=["deliveries"])
 
 
-@router.get("", response_model=schemas.PaginatedDeliveries)
-def list_deliveries(
-    enterprise_id: Optional[int] = None,
-    date_from: Optional[date] = None,
-    date_to: Optional[date] = None,
-    has_antibiotics: Optional[bool] = None,
-    # Фильтры по показателям качества
-    scc_max: Optional[float] = None,
-    bact_max: Optional[float] = None,
-    fat_min: Optional[float] = None,
-    protein_min: Optional[float] = None,
-    # Фильтр по сорту
-    grade: Optional[str] = Query(None, description="E / I / II / out"),
-    ordering: str = Query("-delivery_date", description="Поле сортировки, '-' = убывание"),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(25, ge=1, le=100),
-    db: Session = Depends(get_db),
-):
-    q = (
-        db.query(models.Delivery)
-        .options(joinedload(models.Delivery.quality), joinedload(models.Delivery.enterprise))
-    )
-
-    if enterprise_id:
-        q = q.filter(models.Delivery.enterprise_id == enterprise_id)
-    if date_from:
-        q = q.filter(models.Delivery.delivery_date >= date_from)
-    if date_to:
-        q = q.filter(models.Delivery.delivery_date <= date_to)
-    if has_antibiotics is not None:
-        q = q.filter(models.Delivery.has_antibiotics == has_antibiotics)
-    if grade == "E":
-        q = q.filter(models.Delivery.grade_E_final_kg > 0)
-    elif grade == "I":
-        q = q.filter(models.Delivery.grade_I_kg > 0)
-    elif grade == "II":
-        q = q.filter(models.Delivery.grade_II_kg > 0)
-
-    # Фильтры по качеству — джойним quality_results
-    if any(v is not None for v in [scc_max, bact_max, fat_min, protein_min]):
-        q = q.join(models.QualityResult, isouter=True)
-        if scc_max:
-            q = q.filter(models.QualityResult.scc <= scc_max)
-        if bact_max:
-            q = q.filter(models.QualityResult.bact_count_lab <= bact_max)
-        if fat_min:
-            q = q.filter(models.QualityResult.fat_pct >= fat_min)
-        if protein_min:
-            q = q.filter(models.QualityResult.protein_pct >= protein_min)
-
-    # Сортировка
-    desc = ordering.startswith("-")
-    field = ordering.lstrip("-")
-    col_map = {
-        "delivery_date": models.Delivery.delivery_date,
-        "weight_kg": models.Delivery.weight_kg,
-        "grade_E_final_kg": models.Delivery.grade_E_final_kg,
-    }
-    col = col_map.get(field, models.Delivery.delivery_date)
-    q = q.order_by(col.desc() if desc else col.asc())
-
-    total = q.count()
-    deliveries = q.offset((page - 1) * page_size).limit(page_size).all()
-
-    items = []
-    for d in deliveries:
-        item = schemas.DeliveryOut(
-            id=d.id,
-            enterprise_id=d.enterprise_id,
-            enterprise_name=d.enterprise.name if d.enterprise else None,
-            delivery_date=d.delivery_date,
-            weight_kg=float(d.weight_kg) if d.weight_kg else None,
-            grade_E_kg=float(d.grade_E_kg) if d.grade_E_kg else None,
-            grade_I_kg=float(d.grade_I_kg) if d.grade_I_kg else None,
-            grade_II_kg=float(d.grade_II_kg) if d.grade_II_kg else None,
-            grade_out_kg=float(d.grade_out_kg) if d.grade_out_kg else None,
-            grade_E_final_kg=float(d.grade_E_final_kg) if d.grade_E_final_kg else None,
-            has_antibiotics=d.has_antibiotics or False,
-            quality=schemas.QualityResultOut.model_validate(d.quality) if d.quality else None,
-        )
-        items.append(item)
-
-    return schemas.PaginatedDeliveries(total=total, page=page, page_size=page_size, items=items)
+def get_calculated_grades(db: Session, delivery_ids: list[int]) -> dict[int, str]:
+    """Вызывает calculate_grade() для списка поставок одним запросом."""
+    if not delivery_ids:
+        return {}
+    try:
+        result = db.execute(
+            select(
+                models.Delivery.id,
+                func.calculate_grade(models.Delivery.id).label("grade")
+            ).where(models.Delivery.id.in_(delivery_ids))
+        ).fetchall()
+        return {row[0]: row[1] for row in result}
+    except Exception as e:
+        print(f"[WARN] calculate_grade failed: {e}")
+        return {}
 
 
-@router.get("/{delivery_id}", response_model=schemas.DeliveryOut)
-def get_delivery(delivery_id: int, db: Session = Depends(get_db)):
-    from fastapi import HTTPException
-    d = (
-        db.query(models.Delivery)
-        .options(joinedload(models.Delivery.quality), joinedload(models.Delivery.enterprise))
-        .filter(models.Delivery.id == delivery_id)
-        .first()
-    )
-    if not d:
-        raise HTTPException(status_code=404, detail="Поставка не найдена")
+def build_delivery_out(d, grade: str | None = None) -> schemas.DeliveryOut:
     return schemas.DeliveryOut(
         id=d.id,
         enterprise_id=d.enterprise_id,
@@ -117,5 +39,176 @@ def get_delivery(delivery_id: int, db: Session = Depends(get_db)):
         grade_out_kg=float(d.grade_out_kg) if d.grade_out_kg else None,
         grade_E_final_kg=float(d.grade_E_final_kg) if d.grade_E_final_kg else None,
         has_antibiotics=d.has_antibiotics or False,
+        calculated_grade=grade,
         quality=schemas.QualityResultOut.model_validate(d.quality) if d.quality else None,
     )
+
+
+@router.get("", response_model=schemas.PaginatedDeliveries)
+def list_deliveries(
+    # Идентификация
+    enterprise_id: Optional[int] = None,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    weight_min: Optional[float] = None,
+    weight_max: Optional[float] = None,
+    # Сортность
+    grade: Optional[str] = Query(None, description="E / I / II / out"),
+    # Антибиотики
+    has_antibiotics: Optional[bool] = None,
+    # Температура
+    temp_min: Optional[float] = None,
+    temp_max: Optional[float] = None,
+    # Органолептика
+    org_min: Optional[float] = None,
+    org_max: Optional[float] = None,
+    # Соматика
+    scc_min: Optional[float] = None,
+    scc_max: Optional[float] = None,
+    # КМАФАнМ
+    bact_min: Optional[float] = None,
+    bact_max: Optional[float] = None,
+    # Точка замерзания
+    freeze_min: Optional[float] = None,
+    freeze_max: Optional[float] = None,
+    # Состав
+    fat_min: Optional[float] = None,
+    fat_max: Optional[float] = None,
+    protein_min: Optional[float] = None,
+    protein_max: Optional[float] = None,
+    lactose_min: Optional[float] = None,
+    lactose_max: Optional[float] = None,
+    snf_min: Optional[float] = None,
+    snf_max: Optional[float] = None,
+    # Физ. свойства
+    density_min: Optional[float] = None,
+    density_max: Optional[float] = None,
+    alcohol_min: Optional[float] = None,
+    alcohol_max: Optional[float] = None,
+    acidity_min: Optional[float] = None,
+    acidity_max: Optional[float] = None,
+    # pH
+    ph_min: Optional[float] = None,
+    ph_max: Optional[float] = None,
+    # БГКП
+    coliforms_min: Optional[float] = None,
+    coliforms_max: Optional[float] = None,
+    # СЖК
+    fatty_acids_min: Optional[float] = None,
+    fatty_acids_max: Optional[float] = None,
+    # Мочевина
+    urea_min: Optional[float] = None,
+    urea_max: Optional[float] = None,
+    # Клостридии
+    clostridium_min: Optional[float] = None,
+    clostridium_max: Optional[float] = None,
+    # Сортировка и пагинация
+    ordering: str = Query("-delivery_date"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    q = (
+        db.query(models.Delivery)
+        .options(joinedload(models.Delivery.quality),
+                 joinedload(models.Delivery.enterprise))
+    )
+
+    # ── Фильтры по Delivery ────────────────────────────────────────────────
+    if enterprise_id:
+        q = q.filter(models.Delivery.enterprise_id == enterprise_id)
+    if date_from:
+        q = q.filter(models.Delivery.delivery_date >= date_from)
+    if date_to:
+        q = q.filter(models.Delivery.delivery_date <= date_to)
+    if weight_min is not None:
+        q = q.filter(models.Delivery.weight_kg >= weight_min)
+    if weight_max is not None:
+        q = q.filter(models.Delivery.weight_kg <= weight_max)
+    if has_antibiotics is not None:
+        q = q.filter(models.Delivery.has_antibiotics == has_antibiotics)
+    if grade == "E":
+        q = q.filter(models.Delivery.grade_E_final_kg > 0)
+    elif grade == "I":
+        q = q.filter(models.Delivery.grade_I_kg > 0)
+    elif grade == "II":
+        q = q.filter(models.Delivery.grade_II_kg > 0)
+
+    # ── Фильтры по QualityResult ───────────────────────────────────────────
+    quality_filters = [
+        temp_min, temp_max, org_min, org_max,
+        scc_min, scc_max, bact_min, bact_max, freeze_min, freeze_max,
+        fat_min, fat_max, protein_min, protein_max,
+        lactose_min, lactose_max, snf_min, snf_max,
+        density_min, density_max, alcohol_min, alcohol_max,
+        acidity_min, acidity_max, ph_min, ph_max,
+        coliforms_min, coliforms_max, fatty_acids_min, fatty_acids_max,
+        urea_min, urea_max, clostridium_min, clostridium_max,
+    ]
+
+    if any(v is not None for v in quality_filters):
+        q = q.join(models.QualityResult,
+                   models.Delivery.id == models.QualityResult.delivery_id,
+                   isouter=True)
+
+        def rng(col, mn, mx):
+            nonlocal q
+            if mn is not None:
+                q = q.filter(col >= mn)
+            if mx is not None:
+                q = q.filter(col <= mx)
+
+        QR = models.QualityResult
+        rng(QR.temperature_lab,      temp_min,       temp_max)
+        rng(QR.organoleptic_lab,     org_min,        org_max)
+        rng(QR.scc,                  scc_min,        scc_max)
+        rng(QR.bact_count_lab,       bact_min,       bact_max)
+        rng(QR.freeze_point_lab,     freeze_min,     freeze_max)
+        rng(QR.fat_pct,              fat_min,        fat_max)
+        rng(QR.protein_pct,          protein_min,    protein_max)
+        rng(QR.lactose_pct,          lactose_min,    lactose_max)
+        rng(QR.snf_pct,              snf_min,        snf_max)
+        rng(QR.density,              density_min,    density_max)
+        rng(QR.alcohol_pct,          alcohol_min,    alcohol_max)
+        rng(QR.acidity,              acidity_min,    acidity_max)
+        rng(QR.ph_lab,               ph_min,         ph_max)
+        rng(QR.coliforms,            coliforms_min,  coliforms_max)
+        rng(QR.fatty_acids,          fatty_acids_min, fatty_acids_max)
+        rng(QR.urea,                 urea_min,       urea_max)
+        rng(QR.clostridium_spores,   clostridium_min, clostridium_max)
+
+    # ── Сортировка ─────────────────────────────────────────────────────────
+    desc = ordering.startswith("-")
+    field = ordering.lstrip("-")
+    col_map = {
+        "delivery_date":    models.Delivery.delivery_date,
+        "weight_kg":        models.Delivery.weight_kg,
+        "grade_E_final_kg": models.Delivery.grade_E_final_kg,
+    }
+    col = col_map.get(field, models.Delivery.delivery_date)
+    q = q.order_by(col.desc() if desc else col.asc())
+
+    total = q.count()
+    deliveries = q.offset((page - 1) * page_size).limit(page_size).all()
+
+    grades = get_calculated_grades(db, [d.id for d in deliveries])
+    items = [build_delivery_out(d, grades.get(d.id)) for d in deliveries]
+
+    return schemas.PaginatedDeliveries(
+        total=total, page=page, page_size=page_size, items=items
+    )
+
+
+@router.get("/{delivery_id}", response_model=schemas.DeliveryOut)
+def get_delivery(delivery_id: int, db: Session = Depends(get_db)):
+    d = (
+        db.query(models.Delivery)
+        .options(joinedload(models.Delivery.quality),
+                 joinedload(models.Delivery.enterprise))
+        .filter(models.Delivery.id == delivery_id)
+        .first()
+    )
+    if not d:
+        raise HTTPException(status_code=404, detail="Поставка не найдена")
+    grades = get_calculated_grades(db, [d.id])
+    return build_delivery_out(d, grades.get(d.id))

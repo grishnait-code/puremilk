@@ -73,16 +73,24 @@ class AuditWithFarm(AuditOut):
 
 class QualityResultOut(BaseModel):
     delivery_id: int
+    temperature_lab: Optional[float] = None
+    temperature_std: Optional[float] = None
+    organoleptic_lab: Optional[float] = None
+    organoleptic_std: Optional[float] = None
     scc: Optional[float] = None
     bact_count_lab: Optional[float] = None
     bact_count_std: Optional[float] = None
     freeze_point_lab: Optional[float] = None
+    freeze_point_std: Optional[float] = None
     fat_pct: Optional[float] = None
     protein_pct: Optional[float] = None
     lactose_pct: Optional[float] = None
     snf_pct: Optional[float] = None
     density: Optional[float] = None
+    alcohol_pct: Optional[float] = None
+    acidity: Optional[float] = None
     ph_lab: Optional[float] = None
+    ph_std: Optional[float] = None
     coliforms: Optional[float] = None
     fatty_acids: Optional[float] = None
     urea: Optional[float] = None
@@ -104,6 +112,7 @@ class DeliveryOut(BaseModel):
     grade_out_kg: Optional[float] = None
     grade_E_final_kg: Optional[float] = None
     has_antibiotics: Optional[bool] = False
+    calculated_grade: Optional[str] = None   # E / I / II / out — рассчитывается из БД
     quality: Optional[QualityResultOut] = None
     model_config = {"from_attributes": True}
 

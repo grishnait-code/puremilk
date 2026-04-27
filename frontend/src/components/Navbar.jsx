@@ -31,11 +31,15 @@ export default function Navbar() {
     { to: "/enterprises", label: "Предприятия" },
     { to: "/audits", label: "Аудиты" },
     { to: "/analytics", label: "Аналитика" },
+    { to: "/grade-standards", label: "Нормативы" },
   ];
 
   return (
     <nav style={S.nav}>
-      <NavLink to="/" style={S.logo}>🥛 Quality Monitor</NavLink>
+      <NavLink to="/" style={S.logo}>
+        <img src="/logo.png" alt="PureMilk" style={{ height: 40, width: 40, objectFit: "contain", marginRight: 8, verticalAlign: "middle" }} />
+        PureMilk
+      </NavLink>
       {links.map(({ to, label }) => (
         <NavLink
           key={to}

@@ -138,6 +138,17 @@ class QualityResult(Base):
     delivery = relationship("Delivery", back_populates="quality")
 
 
+class Grade(Base):
+    __tablename__ = "grades"
+
+    id           = Column(Integer, primary_key=True)
+    code         = Column(String(20), unique=True, nullable=False)
+    display_name = Column(String(100), nullable=False)
+    sort_order   = Column(Integer, nullable=False)
+    color        = Column(String(20), default="#1a3a5c")
+    is_active    = Column(Boolean, default=True)
+
+
 class GradeStandard(Base):
     __tablename__ = "grade_standards"
 

@@ -32,6 +32,34 @@ export const getDelivery = (id) =>
 export const getAudits = (params) =>
   api.get("/audits", { params }).then((r) => r.data);
 
+// ── Grades ─────────────────────────────────────────────────────────────────
+
+export const getGrades = () =>
+  api.get("/grades").then((r) => r.data);
+
+export const createGrade = (data) =>
+  api.post("/grades", data).then((r) => r.data);
+
+export const updateGrade = (id, data) =>
+  api.put(`/grades/${id}`, data).then((r) => r.data);
+
+export const deleteGrade = (id) =>
+  api.delete(`/grades/${id}`).then((r) => r.data);
+
+export const reorderGrades = (ids) =>
+  api.post("/grades/reorder", ids).then((r) => r.data);
+
+// ── Grade Standards ────────────────────────────────────────────────────────
+
+export const getGradeStandardsGrouped = () =>
+  api.get("/grade-standards/grouped").then((r) => r.data);
+
+export const updateGradeStandard = (id, data) =>
+  api.put(`/grade-standards/${id}`, data).then((r) => r.data);
+
+export const resetGradeStandards = () =>
+  api.post("/grade-standards/reset").then((r) => r.data);
+
 // ── Analytics ──────────────────────────────────────────────────────────────
 
 export const getEnterpriseYearly = (enterpriseId) =>
