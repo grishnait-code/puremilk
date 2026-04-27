@@ -1,140 +1,158 @@
 # PureMilk — Quality Monitor: Прогресс по задаче
 
+*Обновлено: 27 апреля 2026*
+
+---
+
 ## Что сделано
 
 ### Приложение
-Создано веб-приложение **PureMilk Quality Monitor** — мониторинг качества молока от предприятий-поставщиков. Аналог KSITEST, но для данных о качестве молока.
+Веб-приложение **PureMilk Quality Monitor** — мониторинг качества молока от предприятий-поставщиков.
 
 **Стек:**
-- Backend: Python 3.14 + FastAPI + SQLAlchemy + PostgreSQL 14
+- Backend: Python 3.14 + FastAPI + SQLAlchemy + psycopg3 + PostgreSQL 14
 - Frontend: React 18 + Vite + Recharts + React Query
 - БД: PostgreSQL в Docker-контейнере `qm_postgres` (порт 5433)
 - Git: https://github.com/grishnait-code/puremilk
 
 ---
 
-### База данных
-Таблицы: `enterprises`, `farms`, `contracts`, `audits`, `deliveries`, `quality_results`, `grade_standards`, `targets`, `files`
+## База данных
 
-**Данные импортированы:**
-- АО «Гатчинское» (id=1) — 1289 партий (2009–2025)
-- Новоладожское (id=2) — 1642 партии (2009–2025)
+### Таблицы
 
-Источник данных: Excel-файлы `Gatchinskoye 2. Quality Monitor.xlsx` и `Novoladozhskiy 2. Quality Monitor.xlsx`, лист `Quality`, строки с 35-й — каждая строка = одна партия.
+| Таблица | Описание |
+|---|---|
+| `enterprises` | Предприятия-поставщики молока |
+| `farms` | Фермы/места отгрузки |
+| `contracts` | Договоры на поставку |
+| `audits` | Аудиты хозяйств |
+| `deliveries` | Поставки молока (1 строка = 1 партия) |
+| `quality_results` | Показатели качества поставки (1:1 с deliveries) |
+| `grade_standards` | Нормативы сортности (граничные значения по показателям) |
+| `grades` | Сорта молока (настраиваемые названия и порядок) |
+| `targets` | Целевые значения KPI |
+| `files` | Полиморфное хранилище файлов |
 
-**Маппинг колонок листа Quality:**
-| col | Поле |
-|-----|------|
-| 0 | Дата партии |
-| 1 | Вес, кг |
-| 2 | Пересчитанный вес |
-| 3 | Сорт Е, кг |
-| 4 | Сорт I, кг |
-| 5 | Сорт II, кг |
-| 6 | Вне специфики, кг |
-| 7 | Ошибка определения, кг |
-| 8 | Сорт Е финальный, кг |
-| 9 | Антибиотики (0/1) |
-| 10 | Температура ПО |
-| 11 | Температура Т001-2 |
-| 12 | Органолептика ПО |
-| 13 | Органолептика Т001-2 |
-| 14 | SCC (соматика) |
-| 15 | КМАФАнМ ПО |
-| 16 | КМАФАнМ Т001-2 |
-| 17 | Точка замерзания ПО |
-| 18 | Точка замерзания Т001-2 |
-| 19 | Жир % |
-| 20 | Белок % |
-| 21 | Лактоза % |
-| 22 | СОМО % |
-| 23 | Плотность |
-| 24 | Алкогольная проба % |
-| 25 | Кислотность °T |
-| 26 | pH ПО |
-| 27 | pH Т001-2 |
-| 28 | БГКП |
-| 29 | СЖК |
-| 30 | Мочевина |
-| 31 | Споры клостридий |
+### Таблица grades (новая)
+| Поле | Тип | Описание |
+|---|---|---|
+| id | INT PK | Идентификатор |
+| code | VARCHAR(20) UNIQUE | Внутренний код: E, I, II, G1... |
+| display_name | VARCHAR(100) | Отображаемое название (редактируется пользователем) |
+| sort_order | INT | Приоритет (1 = наивысший) |
+| color | VARCHAR(20) | HEX-цвет для UI |
+| is_active | BOOLEAN | Включён в расчёт |
 
----
+Текущие значения: Экстра (E), Спец. I (I), Спец. II (II)
 
-### API эндпоинты
-| Метод | URL | Описание |
-|-------|-----|----------|
-| GET | /api/enterprises | Список предприятий |
-| GET | /api/enterprises/{id} | Карточка предприятия |
-| GET | /api/enterprises/{id}/farms | Фермы |
-| GET | /api/enterprises/{id}/audits | Аудиты |
-| GET | /api/deliveries | Поставки (все фильтры) |
-| GET | /api/deliveries/{id} | Одна поставка |
-| GET | /api/audits | Аудиты с просрочкой |
-| GET | /api/analytics/enterprise/{id}/yearly | Статистика по годам |
-| GET | /api/analytics/summary | Сводная |
-| GET | /api/analytics/indicators/targets | Целевые значения |
+### Изменения в grade_standards
+Добавлено поле `name VARCHAR(100)` — название набора нормативов (напр. «ГОСТ 31449-2013»).
 
-Документация API: http://localhost:8000/api/docs
+### SQL-функции и VIEW
+
+| Объект | Описание |
+|---|---|
+| `calculate_grade(delivery_id)` | Рассчитывает сорт партии динамически из `grades` + `grade_standards`. Возвращает code сорта или 'out' |
+| `grade_violations(delivery_id)` | Возвращает таблицу нарушенных нормативов для партии |
+| `create_grade_with_standards(code, name, order, color)` | Создаёт новый сорт и копирует структуру нормативов |
+| `VIEW: deliveries_graded` | `SELECT d.*, calculate_grade(d.id) AS calculated_grade FROM deliveries d` |
+
+### Нормативы по сортам (ГОСТ 31449-2013)
+
+| Показатель | Экстра | Спец. I | Спец. II |
+|---|---|---|---|
+| Соматика, тыс/мл | ≤ 200 | ≤ 400 | ≤ 500 |
+| КМАФАнМ, тыс. КОЕ/мл | ≤ 50 | ≤ 100 | ≤ 300 |
+| Жир, % | ≥ 3.60 | ≥ 3.40 | ≥ 2.80 |
+| Белок, % | ≥ 3.20 | ≥ 3.00 | ≥ 2.80 |
+| СОМО, % | ≥ 8.20 | ≥ 8.20 | — |
+| Плотность, кг/м³ | ≥ 1027 | ≥ 1027 | — |
+| БГКП, КОЕ/мл | ≤ 100 | ≤ 200 | ≤ 300 |
+| СЖК | ≤ 0.80 | — | — |
+| Клостридии, НВЧ/л | ≤ 1000 | ≤ 3500 | ≤ 5000 |
+| Т замерзания ПО | 520–560 | 512–560 | 506–560 |
+| Температура ПО, °C | +2…+4 | +2…+6 | +2…+10 |
+| Органолептика ПО | ≥ 5 | ≥ 4 | ≥ 3 |
+| Кислотность, °T | 16–18 | 16–18 | 16–21 |
 
 ---
 
-### Страницы приложения
+## Данные
+
+- **АО «Гатчинское»** (id=1) — 1289 партий (2009–2025)
+- **Новоладожское** (id=2) — 1642 партии (2009–2025)
+
+Источник: листы `Quality` файлов `Gatchinskoye 2.xlsx` и `Novoladozhskiy 2.xlsx`, строки с 35-й (каждая = одна партия).
+
+---
+
+## API эндпоинты
+
+| URL | Описание |
+|---|---|
+| GET /api/enterprises | Список предприятий |
+| GET /api/enterprises/{id} | Карточка предприятия |
+| GET /api/enterprises/{id}/farms | Фермы |
+| GET /api/enterprises/{id}/audits | Аудиты |
+| GET /api/deliveries | Поставки (30+ фильтров, calculated_grade) |
+| GET /api/deliveries/{id} | Одна поставка |
+| GET /api/audits | Аудиты с просрочкой |
+| GET /api/analytics/enterprise/{id}/yearly | Статистика по годам |
+| GET /api/analytics/summary | Сводная по всем предприятиям |
+| GET /api/grades | Список сортов |
+| POST /api/grades | Создать сорт |
+| PUT /api/grades/{id} | Обновить сорт (название, цвет, порядок) |
+| DELETE /api/grades/{id} | Удалить сорт |
+| POST /api/grades/reorder | Изменить порядок сортов |
+| GET /api/grade-standards/grouped | Нормативы сгруппированные по показателям |
+| PUT /api/grade-standards/{id} | Изменить граничное значение |
+| POST /api/grade-standards/reset | Сброс к ГОСТ 31449-2013 |
+
+Документация: http://localhost:8000/api/docs
+
+---
+
+## Страницы приложения
+
 | Страница | URL | Описание |
-|----------|-----|----------|
-| Поставки | /deliveries | Таблица всех партий, фильтры по всем показателям, выбор столбцов |
-| Предприятия | /enterprises | Список предприятий с поиском |
+|---|---|---|
+| Поставки | /deliveries | Таблица всех партий, 29 колонок, фильтры по всем показателям, рассчитанный сорт |
+| Предприятия | /enterprises | Список с поиском |
 | Карточка | /enterprise/{id} | Реквизиты + графики динамики + фермы + аудиты |
 | Аудиты | /audits | Список с индикацией просрочек |
-| Аналитика | /analytics | Сводные диаграммы по всем предприятиям |
+| Аналитика | /analytics | Сводные диаграммы |
+| Нормативы | /grade-standards | Управление сортами и граничными значениями |
 
----
-
-### Страница Поставки — детали
-- **Таблица**: все 29 колонок из `deliveries` + `quality_results`, двухуровневые заголовки по группам, цветовая индикация по нормативам (зелёный/жёлтый/красный), горизонтальный скролл
-- **Кнопка Фильтры**: раскрывается на всю ширину, сдвигает таблицу вниз, 18 групп фильтров (дата, вес, сортность, антибиотики, SCC, бактерии, температура, жир, белок, лактоза, СОМО, плотность, кислотность, pH, БГКП, СЖК, мочевина, клостридии)
-- **Кнопка Столбцы**: выбор видимых колонок по группам, чекбоксы
-
----
-
-### Нормативы (цветовая индикация)
-| Показатель | Норма | Предупреждение |
-|------------|-------|----------------|
-| SCC | ≤ 200 тыс/мл | ≤ 150 |
-| КМАФАнМ | ≤ 50 тыс. КОЕ/мл | ≤ 30 |
-| БГКП | ≤ 100 КОЕ/мл | ≤ 50 |
-| Клостридии | ≤ 1000 НВЧ/л | ≤ 700 |
-| СЖК | ≤ 0.80 | — |
-| Жир | ≥ 3.6% | — |
-| Белок | ≥ 3.2% | — |
-| СОМО | ≥ 8.2% | — |
-| Плотность | ≥ 1027 кг/м³ | — |
+### Страница Нормативы
+- **Блок «Сорта молока»**: переименование, изменение цвета, включение/выключение, удаление, добавление нового сорта
+- **Таблица нормативов**: все показатели × все активные сорта, редактирование в ячейках, сохранение по Enter/✓
+- **Сброс к ГОСТ**: кнопка восстановления значений
 
 ---
 
 ## Как запустить
 
-### Одной командой (двойной клик)
+### Одной командой
 ```
 quality-monitor/start.bat
 ```
-Запускает PostgreSQL, backend и frontend, открывает браузер.
 
 ### Вручную
 ```powershell
-# 1. PostgreSQL
 docker start qm_postgres
 
-# 2. Backend (отдельный терминал)
+# Backend (отдельный терминал)
 cd backend
 $env:DATABASE_URL="postgresql://postgres:postgres@localhost:5433/quality_monitor"
 python -m uvicorn app.main:app --reload --port 8000
 
-# 3. Frontend (отдельный терминал)
+# Frontend (отдельный терминал)
 cd frontend
 npm run dev
 ```
 
-**Приложение:** http://localhost:3000  
+**Приложение:** http://localhost:3000
 **API docs:** http://localhost:8000/api/docs
 
 ---
@@ -144,26 +162,43 @@ npm run dev
 ```powershell
 cd "C:\Users\ggyur\OneDrive\Desktop\Claude\PureMilk\PureMilk\quality-monitor"
 
-# Новый файл (добавить к существующим)
-python scripts/import_xlsx.py \
-  --file "путь/к/файлу.xlsx" \
-  --enterprise "Название предприятия" \
-  --short "Краткое"
+python scripts/import_xlsx.py --file "путь/к/файлу.xlsx" --enterprise "Название" --short "Краткое"
 
-# Переимпорт (удалить старые и загрузить заново)
-python scripts/import_xlsx.py --clear \
-  --file "путь/к/файлу.xlsx" \
-  --enterprise "Название"
+# Переимпорт с очисткой старых данных:
+python scripts/import_xlsx.py --clear --file "путь/к/файлу.xlsx" --enterprise "Название"
 ```
 
 ---
 
-## Сохранение изменений в git
+## Применённые миграции БД
+
+| Файл | Что делает |
+|---|---|
+| `scripts/init.sql` | Начальные целевые значения |
+| `scripts/migrate_grade_calculation.sql` | Первая версия calculate_grade (хардкод) |
+| `scripts/migrate_grade_standards.sql` | Заполнение grade_standards нормативами ГОСТ |
+| `scripts/fix_calculate_grade.sql` | Исправление calculate_grade (row_to_json) |
+| `scripts/migrate_grades_table.sql` | Таблица grades + динамическая calculate_grade |
+
+**Разовые команды после установки:**
+```powershell
+# Применить все миграции (при первом развёртывании)
+cmd /c "docker exec -i qm_postgres psql -U postgres -d quality_monitor < scripts\migrate_grade_standards.sql"
+cmd /c "docker exec -i qm_postgres psql -U postgres -d quality_monitor < scripts\migrate_grades_table.sql"
+cmd /c "docker exec -i qm_postgres psql -U postgres -d quality_monitor < scripts\fix_calculate_grade.sql"
+
+# Активировать сорта (если is_active = NULL)
+docker exec qm_postgres psql -U postgres -d quality_monitor -c "UPDATE grades SET is_active = TRUE WHERE is_active IS NULL;"
+```
+
+---
+
+## Сохранение изменений
 
 ```powershell
 cd "C:\Users\ggyur\OneDrive\Desktop\Claude\PureMilk\PureMilk\quality-monitor"
 git add .
-git commit -m "описание изменений"
+git commit -m "описание"
 git push
 ```
 
@@ -173,49 +208,42 @@ git push
 
 ```
 quality-monitor/
-├── backend/
-│   └── app/
-│       ├── main.py          # FastAPI app, CORS
-│       ├── models.py        # SQLAlchemy модели
-│       ├── schemas.py       # Pydantic схемы (все поля quality_results)
-│       ├── database.py      # psycopg3 подключение
-│       ├── config.py        # DATABASE_URL из env
-│       └── routers/
-│           ├── enterprises.py
-│           ├── deliveries.py  # 30+ параметров фильтрации
-│           ├── audits.py
-│           └── analytics.py
-├── frontend/
-│   └── src/
-│       ├── App.jsx
-│       ├── api/client.js
-│       ├── components/
-│       │   ├── Navbar.jsx      # Логотип PureMilk + навигация
-│       │   └── QualityBadge.jsx
-│       └── pages/
-│           ├── Deliveries.jsx  # Главная: таблица + фильтры + столбцы
-│           ├── Enterprises.jsx
-│           ├── Enterprise.jsx  # Карточка с графиками
-│           ├── Audits.jsx
-│           └── Analytics.jsx
+├── backend/app/
+│   ├── main.py
+│   ├── models.py          # Grade, GradeStandard, Delivery, QualityResult...
+│   ├── schemas.py         # calculated_grade в DeliveryOut
+│   └── routers/
+│       ├── deliveries.py  # calculate_grade через SQLAlchemy func
+│       ├── grades.py      # CRUD сортов
+│       ├── grade_standards.py  # CRUD нормативов
+│       ├── enterprises.py
+│       ├── audits.py
+│       └── analytics.py
+├── frontend/src/
+│   ├── api/client.js      # все API-вызовы
+│   ├── components/Navbar.jsx
+│   └── pages/
+│       ├── Deliveries.jsx      # фильтры + 29 колонок + сорт
+│       ├── GradeStandards.jsx  # управление сортами и нормативами
+│       ├── Enterprises.jsx
+│       ├── Enterprise.jsx
+│       ├── Audits.jsx
+│       └── Analytics.jsx
 ├── scripts/
-│   ├── import_xlsx.py   # Импорт партий из Excel (строка = партия)
-│   └── init.sql         # Начальные нормативы
-├── start.bat            # Запуск одним кликом
-├── docker-compose.yml
-└── README.md
+│   ├── import_xlsx.py
+│   ├── migrate_grade_standards.sql
+│   ├── migrate_grades_table.sql
+│   └── fix_calculate_grade.sql
+├── start.bat
+└── PROGRESS.md
 ```
 
 ---
 
-## Известные особенности / TODO
+## TODO
 
-- [ ] Добавить фильтр по предприятию на странице Поставок (сейчас только через enterprise_id)
-- [ ] Карточка предприятия показывает графики только при наличии данных в `yearly` (нужны поставки с quality_results)
-- [ ] Страница Аналитика пока показывает только сводку по последнему году — можно расширить
-- [ ] Docker Compose настроен но не тестировался в production-режиме (сейчас запуск через start.bat)
-- [ ] Логотип: `frontend/public/logo.png` — белый всплеск молока на прозрачном фоне
-
----
-
-*Обновлено: 26 апреля 2026*
+- [ ] Фильтр по предприятию на странице Поставок (выпадающий список с названиями)
+- [ ] Страница Аналитика — графики по месяцам, сравнение предприятий
+- [ ] Карточка предприятия — графики работают только при наличии quality_results
+- [ ] Добавить скрипт применения всех миграций одной командой (`migrate_all.sql`)
+- [ ] Docker Compose — проверить в production-режиме
