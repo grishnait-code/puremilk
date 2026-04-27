@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getDeliveries } from "../api/client";
+import { useEnterprise } from "../context/EnterpriseContext";
 
 // ── Определение всех колонок ───────────────────────────────────────────────
 
@@ -485,13 +486,21 @@ export default function Deliveries() {
   const [page, setPage] = useState(1);
   const [visible, setVisible] = useState(DEFAULT_VISIBLE);
   const [filterOpen, setFilterOpen] = useState(false);
+  const { selectedEnterprise } = useEnterprise();
 
   const activeCount = Object.values(applied).filter((v) => v !== "").length;
 
   const params = Object.fromEntries(
-    Object.entries({ ...applied, page, page_size: 25 })
-      .filter(([, v]) => v !== "" && v !== null)
+    Object.entries({
+      ...applied,
+      ...(selectedEnterprise ? { enterprise_id: selectedEnterprise.id } : {}),
+      page,
+      page_size: 25,
+    }).filter(([, v]) => v !== "" && v !== null)
   );
+
+  // Сбрасываем страницу при смене предприятия
+  useEffect(() => { setPage(1); }, [selectedEnterprise]);
 
   const { data, isLoading } = useQuery({
     queryKey: ["deliveries", params],

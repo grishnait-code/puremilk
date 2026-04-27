@@ -1,5 +1,8 @@
 import React from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { getEnterprises } from "../api/client";
+import { useEnterprise } from "../context/EnterpriseContext";
 
 const S = {
   nav: {
@@ -10,36 +13,70 @@ const S = {
   logo: {
     fontWeight: 700, fontSize: 18, color: "#fff",
     textDecoration: "none", marginRight: 32, letterSpacing: 0.5,
+    display: "flex", alignItems: "center", gap: 8,
   },
   link: {
     color: "rgba(255,255,255,0.8)", textDecoration: "none",
     padding: "18px 16px", fontSize: 14, fontWeight: 500,
     borderBottom: "3px solid transparent", transition: "all 0.2s",
+    whiteSpace: "nowrap",
   },
   linkActive: {
     color: "#fff", borderBottom: "3px solid #4fc3f7",
   },
-  badge: {
-    marginLeft: "auto", background: "rgba(255,255,255,0.15)",
-    borderRadius: 20, padding: "4px 14px", fontSize: 12, fontWeight: 600,
+  select: {
+    marginLeft: "auto",
+    background: "rgba(255,255,255,0.12)",
+    color: "#fff",
+    border: "1px solid rgba(255,255,255,0.25)",
+    borderRadius: 8,
+    padding: "6px 14px",
+    fontSize: 14,
+    fontWeight: 500,
+    cursor: "pointer",
+    outline: "none",
+    minWidth: 200,
+    maxWidth: 320,
   },
 };
 
+const links = [
+  { to: "/deliveries",      label: "Поставки" },
+  { to: "/enterprises",     label: "Предприятия" },
+  { to: "/audits",          label: "Аудиты" },
+  { to: "/analytics",       label: "Аналитика" },
+  { to: "/grade-standards", label: "Нормативы" },
+];
+
 export default function Navbar() {
-  const links = [
-    { to: "/deliveries", label: "Поставки" },
-    { to: "/enterprises", label: "Предприятия" },
-    { to: "/audits", label: "Аудиты" },
-    { to: "/analytics", label: "Аналитика" },
-    { to: "/grade-standards", label: "Нормативы" },
-  ];
+  const { selectedEnterprise, setSelectedEnterprise } = useEnterprise();
+
+  const { data } = useQuery({
+    queryKey: ["enterprises-nav"],
+    queryFn: () => getEnterprises({ page_size: 100 }),
+    staleTime: 5 * 60_000,
+  });
+
+  const enterprises = data?.items || [];
+
+  const handleChange = (e) => {
+    const id = e.target.value;
+    if (!id) {
+      setSelectedEnterprise(null);
+    } else {
+      const found = enterprises.find((en) => String(en.id) === id);
+      setSelectedEnterprise(found ? { id: found.id, name: found.short_name || found.name } : null);
+    }
+  };
 
   return (
     <nav style={S.nav}>
       <NavLink to="/" style={S.logo}>
-        <img src="/logo.png" alt="PureMilk" style={{ height: 40, width: 40, objectFit: "contain", marginRight: 8, verticalAlign: "middle" }} />
+        <img src="/logo.png" alt="PureMilk"
+          style={{ height: 40, width: 40, objectFit: "contain" }} />
         PureMilk
       </NavLink>
+
       {links.map(({ to, label }) => (
         <NavLink
           key={to}
@@ -51,7 +88,19 @@ export default function Navbar() {
           {label}
         </NavLink>
       ))}
-      <span style={S.badge}>Мониторинг качества молока</span>
+
+      <select
+        style={S.select}
+        value={selectedEnterprise?.id ?? ""}
+        onChange={handleChange}
+      >
+        <option value="" style={{ color: "#222", background: "#fff" }}>Все предприятия</option>
+        {enterprises.map((e) => (
+          <option key={e.id} value={e.id} style={{ color: "#222", background: "#fff" }}>
+            {e.short_name || e.name}
+          </option>
+        ))}
+      </select>
     </nav>
   );
 }
