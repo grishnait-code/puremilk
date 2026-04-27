@@ -1,5 +1,28 @@
 -- Quality Monitor — начальные данные
 
+CREATE TABLE IF NOT EXISTS targets (
+    id          SERIAL PRIMARY KEY,
+    enterprise_id INTEGER,
+    indicator   VARCHAR(50) NOT NULL,
+    value_min   NUMERIC,
+    value_max   NUMERIC,
+    valid_from  DATE,
+    valid_to    DATE,
+    notes       TEXT
+);
+
+CREATE TABLE IF NOT EXISTS grade_standards (
+    id          SERIAL PRIMARY KEY,
+    grade       VARCHAR(10) NOT NULL,
+    indicator   VARCHAR(50) NOT NULL,
+    value_min   NUMERIC,
+    value_max   NUMERIC,
+    unit        VARCHAR(30),
+    valid_from  DATE,
+    valid_to    DATE,
+    source      VARCHAR(100)
+);
+
 -- Целевые значения показателей (глобальные)
 INSERT INTO targets (indicator, value_max, valid_from, notes) VALUES
   ('scc',               200,  '2017-01-01', 'ГОСТ 31449-2013 Экстра'),
