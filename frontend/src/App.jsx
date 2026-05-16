@@ -7,6 +7,7 @@ import Enterprise from "./pages/Enterprise";
 import Audits from "./pages/Audits";
 import Analytics from "./pages/Analytics";
 import GradeStandards from "./pages/GradeStandards";
+import Import from "./pages/Import";
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
         <Route path="/audits" element={<Audits />} />
         <Route path="/analytics" element={<Analytics />} />
         <Route path="/grade-standards" element={<GradeStandards />} />
+        <Route path="/import" element={<Import />} />
       </Routes>
     </div>
   );

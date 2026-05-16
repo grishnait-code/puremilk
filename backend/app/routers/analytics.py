@@ -1,11 +1,99 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, extract
+from sqlalchemy import func, extract, case
 from typing import Optional, List
 from app.database import get_db
 from app import models, schemas
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
+
+# Показатели и их целевые значения (как в Report)
+REPORT_INDICATORS = [
+    {"key": "scc",               "label": "Соматические клетки, тыс. ед./мл", "target": "< 200",     "col": models.QualityResult.scc,               "decimals": 1},
+    {"key": "bact_count_lab",    "label": "КМАФАнМ, тыс. КОЕ/мл",             "target": "< 50",      "col": models.QualityResult.bact_count_lab,    "decimals": 1},
+    {"key": "coliforms",         "label": "БГКП, КОЕ/мл",                      "target": "< 100",     "col": models.QualityResult.coliforms,         "decimals": 1},
+    {"key": "clostridium_spores","label": "Споры клостридий, НВЧ/л",           "target": "< 1000",    "col": models.QualityResult.clostridium_spores,"decimals": 0},
+    {"key": "fat_pct",           "label": "Содержание жира, %",                "target": "≥ 3,60",    "col": models.QualityResult.fat_pct,           "decimals": 3},
+    {"key": "protein_pct",       "label": "Содержание белка, %",               "target": "≥ 3,20",    "col": models.QualityResult.protein_pct,       "decimals": 3},
+    {"key": "freeze_point_lab",  "label": "Точка замерзания ПО, ×10⁻³ °C",    "target": "520–560",   "col": models.QualityResult.freeze_point_lab,  "decimals": 1},
+    {"key": "urea",              "label": "Мочевина, мг/100 мл",               "target": "20–30",     "col": models.QualityResult.urea,              "decimals": 1},
+    {"key": "ph_lab",            "label": "pH ПО",                             "target": "6,50–7,00", "col": models.QualityResult.ph_lab,            "decimals": 2},
+    {"key": "fatty_acids",       "label": "СЖК",                               "target": "< 0,80",    "col": models.QualityResult.fatty_acids,       "decimals": 2},
+]
+
+
+@router.get("/enterprise/{enterprise_id}/report")
+def get_enterprise_report(enterprise_id: int, db: Session = Depends(get_db)):
+    """Таблица качества по годам и кварталам — аналог вкладки Report в Excel."""
+
+    # Все партии предприятия с показателями качества
+    rows = (
+        db.query(
+            extract("year",    models.Delivery.delivery_date).label("yr"),
+            extract("quarter", models.Delivery.delivery_date).label("qtr"),
+            *[func.avg(ind["col"]).label(ind["key"]) for ind in REPORT_INDICATORS]
+        )
+        .join(models.QualityResult,
+              models.Delivery.id == models.QualityResult.delivery_id)
+        .filter(models.Delivery.enterprise_id == enterprise_id)
+        .group_by(
+            extract("year",    models.Delivery.delivery_date),
+            extract("quarter", models.Delivery.delivery_date),
+        )
+        .order_by(
+            extract("year",    models.Delivery.delivery_date),
+            extract("quarter", models.Delivery.delivery_date),
+        )
+        .all()
+    )
+
+    if not rows:
+        return {"periods": [], "rows": []}
+
+    QTR_LABELS = {1: "I кв.", 2: "II кв.", 3: "III кв.", 4: "IV кв."}
+    all_years = sorted(set(int(r.yr) for r in rows))
+
+    # Группируем строки по году
+    year_rows = {}
+    for r in rows:
+        yr = int(r.yr)
+        year_rows.setdefault(yr, []).append(r)
+
+    # Строим структуру: список годовых групп
+    year_groups = []
+    for yr in all_years:
+        quarters = []
+        for r in sorted(year_rows[yr], key=lambda x: int(x.qtr)):
+            qtr = int(r.qtr)
+            qtr_data = {}
+            for ind in REPORT_INDICATORS:
+                v = getattr(r, ind["key"])
+                qtr_data[ind["key"]] = round(float(v), ind["decimals"]) if v is not None else None
+            quarters.append({"label": f"{QTR_LABELS[qtr]} {yr}", "data": qtr_data})
+
+        # Годовой итог
+        annual_data = {}
+        for ind in REPORT_INDICATORS:
+            vals = [getattr(r, ind["key"]) for r in year_rows[yr]
+                    if getattr(r, ind["key"]) is not None]
+            annual_data[ind["key"]] = round(float(sum(vals) / len(vals)), ind["decimals"]) if vals else None
+
+        year_groups.append({
+            "year": yr,
+            "quarters": quarters,
+            "annual": annual_data,
+        })
+
+    # Формируем строки показателей
+    result_rows = []
+    for ind in REPORT_INDICATORS:
+        result_rows.append({
+            "key":    ind["key"],
+            "label":  ind["label"],
+            "target": ind["target"],
+        })
+
+    return {"year_groups": year_groups, "indicators": result_rows}
 
 
 @router.get("/enterprise/{enterprise_id}/yearly", response_model=List[schemas.YearlyStats])

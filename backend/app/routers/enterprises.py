@@ -7,6 +7,21 @@ from app.database import get_db
 from app import models, schemas
 
 
+class FarmCreate(BaseModel):
+    name: str
+    address: Optional[str] = None
+    region: Optional[str] = None
+    coordinates: Optional[str] = None
+    herd_size: Optional[int] = None
+    milking_cows: Optional[int] = None
+    annual_volume_t: Optional[float] = None
+    housing_type: Optional[str] = None
+    milking_system: Optional[str] = None
+    floor_type: Optional[str] = None
+    cooling_system: Optional[str] = None
+    notes: Optional[str] = None
+
+
 class EnterpriseCreate(BaseModel):
     name: str
     short_name: Optional[str] = None
@@ -104,6 +119,46 @@ def get_enterprise(enterprise_id: int, db: Session = Depends(get_db)):
 @router.get("/{enterprise_id}/farms", response_model=list[schemas.FarmOut])
 def get_enterprise_farms(enterprise_id: int, db: Session = Depends(get_db)):
     return db.query(models.Farm).filter(models.Farm.enterprise_id == enterprise_id).all()
+
+
+@router.post("/{enterprise_id}/farms", response_model=schemas.FarmOut)
+def create_farm(enterprise_id: int, body: FarmCreate, db: Session = Depends(get_db)):
+    e = db.query(models.Enterprise).filter(models.Enterprise.id == enterprise_id).first()
+    if not e:
+        raise HTTPException(status_code=404, detail="Предприятие не найдено")
+    farm = models.Farm(enterprise_id=enterprise_id, **body.model_dump())
+    db.add(farm)
+    db.commit()
+    db.refresh(farm)
+    return farm
+
+
+@router.put("/{enterprise_id}/farms/{farm_id}", response_model=schemas.FarmOut)
+def update_farm(enterprise_id: int, farm_id: int, body: FarmCreate, db: Session = Depends(get_db)):
+    farm = db.query(models.Farm).filter(
+        models.Farm.id == farm_id,
+        models.Farm.enterprise_id == enterprise_id
+    ).first()
+    if not farm:
+        raise HTTPException(status_code=404, detail="Ферма не найдена")
+    for field, value in body.model_dump().items():
+        setattr(farm, field, value)
+    db.commit()
+    db.refresh(farm)
+    return farm
+
+
+@router.delete("/{enterprise_id}/farms/{farm_id}")
+def delete_farm(enterprise_id: int, farm_id: int, db: Session = Depends(get_db)):
+    farm = db.query(models.Farm).filter(
+        models.Farm.id == farm_id,
+        models.Farm.enterprise_id == enterprise_id
+    ).first()
+    if not farm:
+        raise HTTPException(status_code=404, detail="Ферма не найдена")
+    db.delete(farm)
+    db.commit()
+    return {"status": "ok"}
 
 
 @router.get("/{enterprise_id}/audits", response_model=list[schemas.AuditOut])

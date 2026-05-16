@@ -22,6 +22,15 @@ export const updateEnterprise = (id, data) =>
 export const getEnterpriseFarms = (id) =>
   api.get(`/enterprises/${id}/farms`).then((r) => r.data);
 
+export const createFarm = (enterpriseId, data) =>
+  api.post(`/enterprises/${enterpriseId}/farms`, data).then((r) => r.data);
+
+export const updateFarm = (enterpriseId, farmId, data) =>
+  api.put(`/enterprises/${enterpriseId}/farms/${farmId}`, data).then((r) => r.data);
+
+export const deleteFarm = (enterpriseId, farmId) =>
+  api.delete(`/enterprises/${enterpriseId}/farms/${farmId}`).then((r) => r.data);
+
 export const getEnterpriseAudits = (id) =>
   api.get(`/enterprises/${id}/audits`).then((r) => r.data);
 
@@ -40,6 +49,15 @@ export const getDelivery = (id) =>
 
 export const getAudits = (params) =>
   api.get("/audits", { params }).then((r) => r.data);
+
+export const createAudit = (data) =>
+  api.post("/audits", data).then((r) => r.data);
+
+export const updateAudit = (id, data) =>
+  api.put(`/audits/${id}`, data).then((r) => r.data);
+
+export const deleteAudit = (id) =>
+  api.delete(`/audits/${id}`).then((r) => r.data);
 
 // ── Grades ─────────────────────────────────────────────────────────────────
 
@@ -73,6 +91,9 @@ export const resetGradeStandards = () =>
 
 export const getEnterpriseYearly = (enterpriseId) =>
   api.get(`/analytics/enterprise/${enterpriseId}/yearly`).then((r) => r.data);
+
+export const getEnterpriseReport = (enterpriseId) =>
+  api.get(`/analytics/enterprise/${enterpriseId}/report`).then((r) => r.data);
 
 export const getSummary = (params) =>
   api.get("/analytics/summary", { params }).then((r) => r.data);

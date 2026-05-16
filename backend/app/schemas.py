@@ -43,10 +43,16 @@ class FarmOut(BaseModel):
     enterprise_id: int
     name: str
     address: Optional[str] = None
+    region: Optional[str] = None
+    coordinates: Optional[str] = None
     herd_size: Optional[int] = None
     milking_cows: Optional[int] = None
+    annual_volume_t: Optional[float] = None
     housing_type: Optional[str] = None
     milking_system: Optional[str] = None
+    floor_type: Optional[str] = None
+    cooling_system: Optional[str] = None
+    notes: Optional[str] = None
     model_config = {"from_attributes": True}
 
 

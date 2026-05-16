@@ -46,6 +46,7 @@ const links = [
   { to: "/audits",          label: "Аудиты" },
   { to: "/analytics",       label: "Аналитика" },
   { to: "/grade-standards", label: "Нормативы" },
+  { to: "/import",          label: "Загрузка данных" },
 ];
 
 export default function Navbar() {
