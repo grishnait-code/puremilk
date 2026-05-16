@@ -13,6 +13,12 @@ export const getEnterprises = (params) =>
 export const getEnterprise = (id) =>
   api.get(`/enterprises/${id}`).then((r) => r.data);
 
+export const createEnterprise = (data) =>
+  api.post("/enterprises", data).then((r) => r.data);
+
+export const updateEnterprise = (id, data) =>
+  api.put(`/enterprises/${id}`, data).then((r) => r.data);
+
 export const getEnterpriseFarms = (id) =>
   api.get(`/enterprises/${id}/farms`).then((r) => r.data);
 
@@ -23,6 +29,9 @@ export const getEnterpriseAudits = (id) =>
 
 export const getDeliveries = (params) =>
   api.get("/deliveries", { params }).then((r) => r.data);
+
+export const getDeliveryStats = (params) =>
+  api.get("/deliveries/stats", { params }).then((r) => r.data);
 
 export const getDelivery = (id) =>
   api.get(`/deliveries/${id}`).then((r) => r.data);

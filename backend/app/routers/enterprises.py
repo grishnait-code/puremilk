@@ -2,8 +2,30 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import Optional
+from pydantic import BaseModel
 from app.database import get_db
 from app import models, schemas
+
+
+class EnterpriseCreate(BaseModel):
+    name: str
+    short_name: Optional[str] = None
+    org_form: Optional[str] = None
+    region: Optional[str] = None
+    legal_address: Optional[str] = None
+    actual_address: Optional[str] = None
+    ogrn: Optional[str] = None
+    inn: Optional[str] = None
+    kpp: Optional[str] = None
+    bank_name: Optional[str] = None
+    bank_account: Optional[str] = None
+    corr_account: Optional[str] = None
+    bik: Optional[str] = None
+    director_position: Optional[str] = None
+    director_name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    notes: Optional[str] = None
 
 router = APIRouter(prefix="/enterprises", tags=["enterprises"])
 
@@ -46,6 +68,29 @@ def list_enterprises(
         ))
 
     return schemas.PaginatedEnterprises(total=total, items=items)
+
+
+@router.post("", response_model=schemas.EnterpriseOut)
+def create_enterprise(body: EnterpriseCreate, db: Session = Depends(get_db)):
+    e = models.Enterprise(**body.model_dump(exclude_none=False))
+    db.add(e)
+    db.commit()
+    db.refresh(e)
+    return e
+
+
+@router.put("/{enterprise_id}", response_model=schemas.EnterpriseOut)
+def update_enterprise(
+    enterprise_id: int, body: EnterpriseCreate, db: Session = Depends(get_db)
+):
+    e = db.query(models.Enterprise).filter(models.Enterprise.id == enterprise_id).first()
+    if not e:
+        raise HTTPException(status_code=404, detail="Предприятие не найдено")
+    for field, value in body.model_dump().items():
+        setattr(e, field, value)
+    db.commit()
+    db.refresh(e)
+    return e
 
 
 @router.get("/{enterprise_id}", response_model=schemas.EnterpriseOut)

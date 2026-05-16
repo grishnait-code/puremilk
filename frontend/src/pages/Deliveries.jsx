@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getDeliveries } from "../api/client";
+import { getDeliveries, getDeliveryStats } from "../api/client";
 import { useEnterprise } from "../context/EnterpriseContext";
 
 // ── Определение всех колонок ───────────────────────────────────────────────
@@ -478,6 +478,49 @@ function ColumnSelector({ visible, onChange }) {
   );
 }
 
+// ── Полоска статистики сортности ───────────────────────────────────────────
+
+const GRADE_STYLE = {
+  E:       { color: "#2e7d32", bg: "#e8f5e9", label: "Экстра" },
+  I:       { color: "#f57f17", bg: "#fff8e1", label: "Спец. I" },
+  II:      { color: "#e65100", bg: "#fff3e0", label: "Спец. II" },
+  out:     { color: "#c62828", bg: "#ffebee", label: "Вне спец." },
+  unknown: { color: "#9e9e9e", bg: "#f5f5f5", label: "Нет данных" },
+};
+
+function GradeStats({ statsParams }) {
+  const { data } = useQuery({
+    queryKey: ["delivery-stats", statsParams],
+    queryFn: () => getDeliveryStats(statsParams),
+    staleTime: 30_000,
+  });
+
+  if (!data || !data.total || Object.keys(data.grades).length === 0) return null;
+
+  const order = ["E", "I", "II", "out", "unknown"];
+  const entries = order
+    .filter((g) => data.grades[g])
+    .map((g) => ({ g, ...data.grades[g], ...(GRADE_STYLE[g] || GRADE_STYLE.unknown) }));
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8,
+      background: "#fff", borderRadius: 10, padding: "8px 16px",
+      boxShadow: "0 1px 4px rgba(0,0,0,0.07)" }}>
+      {entries.map(({ g, pct, color, bg, label }) => (
+        <span key={g} style={{ fontSize: 12, fontWeight: 600,
+          color, background: bg, padding: "3px 10px", borderRadius: 8,
+          whiteSpace: "nowrap" }}>
+          {label}: {pct}%
+        </span>
+      ))}
+      <span style={{ fontSize: 12, color: "#aaa", whiteSpace: "nowrap" }}>
+        всего {data.total.toLocaleString("ru-RU")}
+      </span>
+    </div>
+  );
+}
+
+
 // ── Главный компонент ──────────────────────────────────────────────────────
 
 export default function Deliveries() {
@@ -507,6 +550,14 @@ export default function Deliveries() {
     queryFn: () => getDeliveries(params),
   });
 
+  // Параметры для статистики (без page/page_size)
+  const statsParams = Object.fromEntries(
+    Object.entries({
+      ...applied,
+      ...(selectedEnterprise ? { enterprise_id: selectedEnterprise.id } : {}),
+    }).filter(([, v]) => v !== "" && v !== null)
+  );
+
   const handleChange = (key, val) => setDraft((d) => ({ ...d, [key]: val }));
   const handleApply = () => { setApplied({ ...draft }); setPage(1); };
   const handleReset = () => { setDraft(EMPTY_FILTERS); setApplied(EMPTY_FILTERS); setPage(1); };
@@ -522,22 +573,16 @@ export default function Deliveries() {
 
   return (
     <div style={S.page}>
-      {/* Верхняя строка: кнопка фильтров слева, столбцы + счётчик справа */}
+      {/* Верхняя строка: кнопка фильтров + статистика сортности + столбцы */}
       <div style={{ display: "flex", alignItems: "center",
-        justifyContent: "space-between", marginBottom: 12 }}>
+        gap: 12, marginBottom: 12 }}>
         <FilterButton
           activeCount={activeCount}
           open={filterOpen}
           onToggle={() => setFilterOpen((v) => !v)}
         />
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          {data && (
-            <span style={{ color: "#666", fontSize: 13 }}>
-              Найдено: <b>{data.total}</b>
-            </span>
-          )}
-          <ColumnSelector visible={visible} onChange={setVisible} />
-        </div>
+        <GradeStats statsParams={statsParams} />
+        <ColumnSelector visible={visible} onChange={setVisible} />
       </div>
 
       {/* Панель фильтров — на всю ширину, сдвигает таблицу вниз */}
