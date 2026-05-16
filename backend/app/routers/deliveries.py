@@ -35,12 +35,8 @@ def build_filter_query(db: Session, enterprise_id, date_from, date_to,
         q = q.filter(models.Delivery.weight_kg <= weight_max)
     if has_antibiotics is not None:
         q = q.filter(models.Delivery.has_antibiotics == has_antibiotics)
-    if grade == "E":
-        q = q.filter(models.Delivery.grade_E_final_kg > 0)
-    elif grade == "I":
-        q = q.filter(models.Delivery.grade_I_kg > 0)
-    elif grade == "II":
-        q = q.filter(models.Delivery.grade_II_kg > 0)
+    if grade in ("E", "I", "II", "out"):
+        q = q.filter(func.calculate_grade(models.Delivery.id) == grade)
 
     quality_filters = [
         temp_min, temp_max, org_min, org_max,
@@ -263,12 +259,8 @@ def list_deliveries(
         q = q.filter(models.Delivery.weight_kg <= weight_max)
     if has_antibiotics is not None:
         q = q.filter(models.Delivery.has_antibiotics == has_antibiotics)
-    if grade == "E":
-        q = q.filter(models.Delivery.grade_E_final_kg > 0)
-    elif grade == "I":
-        q = q.filter(models.Delivery.grade_I_kg > 0)
-    elif grade == "II":
-        q = q.filter(models.Delivery.grade_II_kg > 0)
+    if grade in ("E", "I", "II", "out"):
+        q = q.filter(func.calculate_grade(models.Delivery.id) == grade)
 
     # ── Фильтры по QualityResult ───────────────────────────────────────────
     quality_filters = [

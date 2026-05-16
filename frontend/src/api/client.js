@@ -92,6 +92,15 @@ export const resetGradeStandards = () =>
 export const getEnterpriseYearly = (enterpriseId) =>
   api.get(`/analytics/enterprise/${enterpriseId}/yearly`).then((r) => r.data);
 
+export const getEnterpriseMonthly = (enterpriseId, params) =>
+  api.get(`/analytics/enterprise/${enterpriseId}/monthly`, { params }).then((r) => r.data);
+
+export const getGradeDecline = (enterpriseId, params) =>
+  api.get(`/analytics/enterprise/${enterpriseId}/grade-decline`, { params }).then((r) => r.data);
+
+export const compareEnterprises = (params) =>
+  api.get("/analytics/compare", { params }).then((r) => r.data);
+
 export const getEnterpriseReport = (enterpriseId) =>
   api.get(`/analytics/enterprise/${enterpriseId}/report`).then((r) => r.data);
 

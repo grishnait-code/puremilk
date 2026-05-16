@@ -9,6 +9,7 @@ import {
   getEnterprise, getEnterpriseFarms, getEnterpriseAudits, getEnterpriseYearly,
   getEnterpriseReport, createFarm, updateFarm, deleteFarm
 } from "../api/client";
+import DownloadReportBtn from "../components/DownloadReportBtn";
 
 const S = {
   page: { padding: "24px 32px" },
@@ -375,7 +376,10 @@ export default function Enterprise() {
 
   return (
     <div style={S.page}>
-      <span style={S.back} onClick={() => navigate("/enterprises")}>← Все предприятия</span>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <span style={S.back} onClick={() => navigate("/enterprises")}>← Все предприятия</span>
+        <DownloadReportBtn enterpriseId={id} enterpriseName={enterprise?.short_name || enterprise?.name} />
+      </div>
 
       <div style={S.header}>
         <h1 style={S.name}>{enterprise.name}</h1>
