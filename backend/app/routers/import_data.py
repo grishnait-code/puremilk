@@ -66,9 +66,13 @@ def _parse_date_valio(v, datemode=0) -> Optional[datetime.date]:
     """Парсит дату из ячейки VALIO-отчёта (строка DD.MM.YYYY или Excel serial)."""
     if v is None or v == "":
         return None
+    if isinstance(v, datetime.datetime):
+        return v.date()
+    if isinstance(v, datetime.date):
+        return v
     # Попробуем как строку DD.MM.YYYY
     s = str(v).strip()
-    for fmt in ("%d.%m.%Y", "%d.%m.%y"):
+    for fmt in ("%d.%m.%Y", "%d.%m.%y", "%Y-%m-%d"):
         try:
             return datetime.datetime.strptime(s, fmt).date()
         except ValueError:
@@ -102,22 +106,51 @@ def _parse_valio_xls(content: bytes, filename: str) -> dict:
     Возвращает: { enterprise_name, week, deliveries: [...] }
     """
     import xlrd
+    import openpyxl
 
-    try:
-        wb = xlrd.open_workbook(file_contents=content)
-    except Exception as e:
-        raise ValueError(f"Не удалось открыть файл: {e}")
+    is_xlsx = filename.lower().endswith('.xlsx') or content.startswith(b'PK\x03\x04')
 
-    ws = wb.sheet_by_index(0)
-    datemode = wb.datemode
+    if is_xlsx:
+        try:
+            wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
+            ws_sheet = wb.worksheets[0]
+            # Превращаем в 2D-массив (0-based)
+            rows = []
+            for row in ws_sheet.iter_rows(values_only=True):
+                rows.append(list(row))
+            
+            class SheetWrapper:
+                def __init__(self, rows_list):
+                    self.rows = rows_list
+                    self.nrows = len(rows_list)
+                    self.ncols = max(len(r) for r in rows_list) if rows_list else 0
+
+                def cell_value(self, r, c):
+                    if r < len(self.rows) and c < len(self.rows[r]):
+                        return self.rows[r][c]
+                    return ""
+
+            ws = SheetWrapper(rows)
+            datemode = 0
+        except Exception as e:
+            raise ValueError(f"Не удалось открыть XLSX-файл: {e}")
+    else:
+        try:
+            wb = xlrd.open_workbook(file_contents=content)
+            ws = wb.sheet_by_index(0)
+            datemode = wb.datemode
+        except Exception as e:
+            raise ValueError(f"Не удалось открыть XLS-файл: {e}")
 
     # Название хозяйства (row 2, col 3)
     enterprise_name = ""
     for col in range(ws.ncols):
-        v = str(ws.cell_value(1, col)).strip()
-        if v and v not in ("", "Хозяйство"):
-            enterprise_name = v
-            break
+        val = ws.cell_value(1, col)
+        if val is not None:
+            v = str(val).strip()
+            if v and v not in ("", "Хозяйство", "None"):
+                enterprise_name = v
+                break
 
     # Номер недели (row 4, col 2)
     week = None

@@ -218,7 +218,7 @@ def main():
     args = parser.parse_args()
 
     db_url = DATABASE_URL.replace(
-        "postgresql://", "postgresql+psycopg://"
+        "postgresql://", "postgresql+psycopg2://"
     ) if "psycopg2" not in DATABASE_URL else DATABASE_URL
 
     engine = create_engine(db_url)
