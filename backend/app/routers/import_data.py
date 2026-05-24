@@ -39,6 +39,9 @@ import io
 import datetime
 from typing import Optional
 
+import xlrd
+import openpyxl
+
 from fastapi import APIRouter, Depends, File, UploadFile, Form, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -79,7 +82,6 @@ def _parse_date_valio(v, datemode=0) -> Optional[datetime.date]:
             pass
     # Попробуем как Excel-дату (float)
     try:
-        import xlrd
         f = float(v)
         if 30000 < f < 60000:  # разумный диапазон Excel-дат
             return xlrd.xldate_as_datetime(f, datemode).date()
@@ -105,9 +107,6 @@ def _parse_valio_xls(content: bytes, filename: str) -> dict:
     Парсит XLS/XLSX файл отчёта VALIO.
     Возвращает: { enterprise_name, week, deliveries: [...] }
     """
-    import xlrd
-    import openpyxl
-
     is_xlsx = filename.lower().endswith('.xlsx') or content.startswith(b'PK\x03\x04')
 
     if is_xlsx:

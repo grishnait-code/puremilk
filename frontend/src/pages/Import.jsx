@@ -205,8 +205,8 @@ export default function Import() {
             ))}
           </select>
           {preview?.enterprise_name && enterprises?.items && !enterprises.items.some(
-            (e) => e.name.toLowerCase().includes(preview.enterprise_name.toLowerCase()) ||
-                   (e.short_name || "").toLowerCase().includes(preview.enterprise_name.toLowerCase())
+            (e) => e.name.toLowerCase() === preview.enterprise_name.toLowerCase() ||
+                   (e.short_name || "").toLowerCase() === preview.enterprise_name.toLowerCase()
           ) && (
             <button
               onClick={() => createEnterpriseMut.mutate({ name: preview.enterprise_name, short_name: preview.enterprise_name })}
