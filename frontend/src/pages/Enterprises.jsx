@@ -260,7 +260,7 @@ export default function Enterprises() {
               <th style={S.th}>Регион</th>
               <th style={S.th}>Ферм</th>
               <th style={S.th}>Последняя поставка</th>
-              <th style={S.th}></th>
+              <th style={S.th} colSpan={2}></th>
             </tr>
           </thead>
           <tbody>
@@ -287,7 +287,7 @@ export default function Enterprises() {
                     ? new Date(e.last_delivery_date).toLocaleDateString("ru-RU")
                     : "—"}
                 </td>
-                <td style={{ ...S.td, width: 80 }}>
+                <td style={{ ...S.td, width: 110, whiteSpace: "nowrap" }}>
                   <button
                     style={{ padding: "4px 10px", background: "#f5f5f5",
                       border: "1px solid #ddd", borderRadius: 5,
@@ -298,6 +298,19 @@ export default function Enterprises() {
                     }}
                   >
                     ✎ Изменить
+                  </button>
+                </td>
+                <td style={{ ...S.td, width: 110, whiteSpace: "nowrap" }}>
+                  <button
+                    style={{ padding: "4px 10px", background: "#e8f0fe",
+                      border: "1px solid #c5d8f8", borderRadius: 5,
+                      cursor: "pointer", fontSize: 12, color: "#1a3a5c", fontWeight: 500 }}
+                    onClick={(ev) => {
+                      ev.stopPropagation();
+                      navigate(`/enterprise/${e.id}`, { state: { tab: 2 } });
+                    }}
+                  >
+                    🏠 Фермы {e.farm_count > 0 ? `(${e.farm_count})` : ""}
                   </button>
                 </td>
               </tr>

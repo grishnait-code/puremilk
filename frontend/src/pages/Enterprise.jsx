@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -332,7 +332,8 @@ function FarmModal({ farm, onClose, onSave }) {
 export default function Enterprise() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState(0);
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState(location.state?.tab ?? 0);
   const [farmModal, setFarmModal] = useState(null); // null | "new" | farm object
   const [deletingFarm, setDeletingFarm] = useState(null);
   const queryClient = useQueryClient();

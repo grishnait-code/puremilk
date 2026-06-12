@@ -20,14 +20,19 @@ class AuditCreate(BaseModel):
     notes: Optional[str] = None
 
 
-def _build_audit_with_farm(a, db: Session) -> schemas.AuditWithFarm:
+def _build_audit_with_farm(a, db: Session, superseded: bool = False) -> schemas.AuditWithFarm:
     farm = a.farm
     enterprise = farm.enterprise if farm else None
     today = date.today()
     overdue = None
     if a.next_audit_date:
-        diff = (today - a.next_audit_date).days
-        overdue = diff if diff > 0 else 0
+        # Просрочка показывается только для последнего аудита фермы.
+        # Если по этой ферме есть более новый аудит — считаем overdue = 0.
+        if superseded:
+            overdue = 0
+        else:
+            diff = (today - a.next_audit_date).days
+            overdue = diff if diff > 0 else 0
     return schemas.AuditWithFarm(
         id=a.id,
         farm_id=a.farm_id,
@@ -41,6 +46,15 @@ def _build_audit_with_farm(a, db: Session) -> schemas.AuditWithFarm:
         enterprise_name=enterprise.name if enterprise else None,
         enterprise_id=enterprise.id if enterprise else None,
     )
+
+
+def _latest_audit_date_per_farm(audits) -> dict:
+    """Возвращает {farm_id: max(audit_date)} по списку аудитов."""
+    result = {}
+    for a in audits:
+        if a.farm_id not in result or a.audit_date > result[a.farm_id]:
+            result[a.farm_id] = a.audit_date
+    return result
 
 
 @router.get("", response_model=list[schemas.AuditWithFarm])
@@ -58,8 +72,6 @@ def list_audits(
     )
     if enterprise_id:
         q = q.join(models.Farm).filter(models.Farm.enterprise_id == enterprise_id)
-    if overdue_only:
-        q = q.filter(models.Audit.next_audit_date < date.today())
     if result:
         q = q.filter(models.Audit.result == result)
     if upcoming_days:
@@ -69,7 +81,22 @@ def list_audits(
             models.Audit.next_audit_date <= cutoff,
         )
 
-    return [_build_audit_with_farm(a, db) for a in q.all()]
+    all_audits = q.all()
+
+    # Для каждой фермы определяем дату самого свежего аудита
+    latest_by_farm = _latest_audit_date_per_farm(all_audits)
+
+    def is_superseded(a) -> bool:
+        """True если для этой фермы есть более новый аудит."""
+        return a.audit_date < latest_by_farm.get(a.farm_id, a.audit_date)
+
+    built = [_build_audit_with_farm(a, db, superseded=is_superseded(a)) for a in all_audits]
+
+    # Фильтр overdue_only применяем после расчёта (учитываем superseded)
+    if overdue_only:
+        built = [b for b in built if b.overdue_days and b.overdue_days > 0]
+
+    return built
 
 
 @router.post("", response_model=schemas.AuditWithFarm)
