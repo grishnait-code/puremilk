@@ -335,8 +335,8 @@ quality-monitor/
 
 ### Аудиты — исправление логики просрочки
 - Просрочка больше не показывается у устаревших аудитов, если по той же ферме есть более новый аудит
-- Реализовано в `_build_audit_with_farm` через флаг `superseded` + хелпер `_latest_audit_date_per_farm`
-- Фильтр «Только просроченные» тоже учитывает это правило
+- Backend (`audits.py`): `_build_audit_with_farm` принимает флаг `superseded`; хелпер `_latest_audit_date_per_farm` определяет самый свежий аудит на ферму; фильтр `overdue_only` применяется после расчёта
+- Frontend (`Audits.jsx`): `isOverdue` берётся из `a.overdue_days` (значение бэкенда), а не вычисляется самостоятельно из `next_audit_date`; количество дней просрочки тоже из `a.overdue_days`
 
 ---
 
