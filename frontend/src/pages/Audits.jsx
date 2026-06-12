@@ -303,8 +303,9 @@ export default function Audits() {
             {data.map((a) => {
               const nextDate = a.next_audit_date ? new Date(a.next_audit_date) : null;
               const daysLeft = nextDate ? Math.round((nextDate - new Date()) / 86400000) : null;
-              const isOverdue = daysLeft !== null && daysLeft < 0;
-              const isSoon = daysLeft !== null && daysLeft >= 0 && daysLeft <= 30;
+              // Используем overdue_days от бэкенда — там учтено, есть ли более новый аудит фермы
+              const isOverdue = a.overdue_days > 0;
+              const isSoon = !isOverdue && daysLeft !== null && daysLeft >= 0 && daysLeft <= 30;
 
               return (
                 <tr key={a.id}
@@ -339,7 +340,7 @@ export default function Audits() {
                     {isOverdue ? (
                       <span style={{ background: "#ffebee", color: "#c62828",
                         padding: "3px 8px", borderRadius: 10, fontSize: 12, fontWeight: 700 }}>
-                        +{Math.abs(daysLeft)} дн. просрочка
+                        +{a.overdue_days} дн. просрочка
                       </span>
                     ) : isSoon ? (
                       <span style={{ background: "#fff8e1", color: "#f57f17",
