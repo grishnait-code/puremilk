@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getDeliveries, getDeliveryStats } from "../api/client";
-import { useEnterprise } from "../context/EnterpriseContext";
+import { getDeliveries, getDeliveryStats, getEnterprises, getProcessors } from "../api/client";
 
 // ── Определение всех колонок ───────────────────────────────────────────────
 
@@ -282,9 +281,11 @@ const FILTER_GROUPS = [
   },
 ];
 
-const EMPTY_FILTERS = Object.fromEntries(
-  FILTER_GROUPS.flatMap((g) => g.filters.map((f) => [f.key, ""]))
-);
+const EMPTY_FILTERS = {
+  enterprise_id: "",
+  processor_id: "",
+  ...Object.fromEntries(FILTER_GROUPS.flatMap((g) => g.filters.map((f) => [f.key, ""]))),
+};
 
 // ── Кнопка фильтров ────────────────────────────────────────────────────────
 
@@ -316,7 +317,7 @@ function FilterButton({ activeCount, open, onToggle }) {
 
 // ── Панель фильтров ────────────────────────────────────────────────────────
 
-function FilterPanel({ filters, onChange, onApply, onReset, activeCount }) {
+function FilterPanel({ filters, onChange, onApply, onReset, activeCount, enterprises, processors }) {
   const inputStyle = {
     padding: "6px 10px", border: "1px solid #ddd", borderRadius: 6,
     fontSize: 13, width: "100%", outline: "none",
@@ -344,6 +345,46 @@ function FilterPanel({ filters, onChange, onApply, onReset, activeCount }) {
           <button onClick={onApply} style={{ ...S.btn(true), padding: "6px 14px" }}>
             Применить
           </button>
+        </div>
+      </div>
+
+      {/* Предприятие и переработчик */}
+      <div style={{
+        display: "grid", gridTemplateColumns: "1fr 1fr",
+        padding: "14px 20px", gap: 16, borderBottom: "1px solid #f0f0f0",
+        background: "#f9fbff",
+      }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#1a3a5c",
+            textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+            Предприятие
+          </div>
+          <select
+            style={selectStyle}
+            value={filters.enterprise_id}
+            onChange={(e) => { onChange("enterprise_id", e.target.value); onChange("processor_id", ""); }}
+          >
+            <option value="">Все предприятия</option>
+            {enterprises.map((e) => (
+              <option key={e.id} value={e.id}>{e.short_name || e.name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#1a3a5c",
+            textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+            Переработчик
+          </div>
+          <select
+            style={selectStyle}
+            value={filters.processor_id}
+            onChange={(e) => { onChange("processor_id", e.target.value); onChange("enterprise_id", ""); }}
+          >
+            <option value="">Все переработчики</option>
+            {processors.map((p) => (
+              <option key={p.id} value={p.id}>{p.short_name || p.name}</option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -529,21 +570,28 @@ export default function Deliveries() {
   const [page, setPage] = useState(1);
   const [visible, setVisible] = useState(DEFAULT_VISIBLE);
   const [filterOpen, setFilterOpen] = useState(false);
-  const { selectedEnterprise } = useEnterprise();
+
+  const { data: enterprisesData } = useQuery({
+    queryKey: ["enterprises-nav"],
+    queryFn: () => getEnterprises({ page_size: 200 }),
+    staleTime: 5 * 60_000,
+  });
+  const enterprises = enterprisesData?.items || [];
+
+  const { data: processorsData } = useQuery({
+    queryKey: ["processors-nav"],
+    queryFn: () => getProcessors(),
+    staleTime: 5 * 60_000,
+  });
+  // /api/processors возвращает массив напрямую
+  const processors = Array.isArray(processorsData) ? processorsData : [];
 
   const activeCount = Object.values(applied).filter((v) => v !== "").length;
 
   const params = Object.fromEntries(
-    Object.entries({
-      ...applied,
-      ...(selectedEnterprise ? { enterprise_id: selectedEnterprise.id } : {}),
-      page,
-      page_size: 25,
-    }).filter(([, v]) => v !== "" && v !== null)
+    Object.entries({ ...applied, page, page_size: 25 })
+      .filter(([, v]) => v !== "" && v !== null)
   );
-
-  // Сбрасываем страницу при смене предприятия
-  useEffect(() => { setPage(1); }, [selectedEnterprise]);
 
   const { data, isLoading } = useQuery({
     queryKey: ["deliveries", params],
@@ -552,10 +600,7 @@ export default function Deliveries() {
 
   // Параметры для статистики (без page/page_size)
   const statsParams = Object.fromEntries(
-    Object.entries({
-      ...applied,
-      ...(selectedEnterprise ? { enterprise_id: selectedEnterprise.id } : {}),
-    }).filter(([, v]) => v !== "" && v !== null)
+    Object.entries(applied).filter(([, v]) => v !== "" && v !== null)
   );
 
   const handleChange = (key, val) => setDraft((d) => ({ ...d, [key]: val }));
@@ -593,6 +638,8 @@ export default function Deliveries() {
           onApply={handleApply}
           onReset={handleReset}
           activeCount={activeCount}
+          enterprises={enterprises}
+          processors={processors}
         />
       )}
 

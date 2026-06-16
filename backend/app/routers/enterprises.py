@@ -50,7 +50,7 @@ def list_enterprises(
     search: Optional[str] = Query(None, description="Поиск по названию или региону"),
     region: Optional[str] = None,
     page: int = Query(1, ge=1),
-    page_size: int = Query(25, ge=1, le=100),
+    page_size: int = Query(25, ge=1, le=500),
     db: Session = Depends(get_db),
 ):
     q = db.query(models.Enterprise)

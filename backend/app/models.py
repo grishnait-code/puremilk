@@ -1,9 +1,21 @@
 from sqlalchemy import (
     Column, Integer, String, Numeric, Date, Boolean,
-    Text, DateTime, ForeignKey
+    Text, DateTime, ForeignKey, func
 )
 from sqlalchemy.orm import relationship
 from app.database import Base
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True)
+    username = Column(String(50), unique=True, nullable=False)
+    full_name = Column(String(150))
+    hashed_password = Column(String(255), nullable=False)
+    role = Column(String(20), nullable=False, default="user")  # admin | user
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class Enterprise(Base):
@@ -33,6 +45,7 @@ class Enterprise(Base):
     contracts = relationship("Contract", back_populates="enterprise")
     deliveries = relationship("Delivery", back_populates="enterprise")
     targets = relationship("Target", back_populates="enterprise")
+    processor_links = relationship("EnterpriseProcessor", back_populates="enterprise")
 
 
 class Farm(Base):
@@ -176,6 +189,39 @@ class Target(Base):
     notes = Column(Text)
 
     enterprise = relationship("Enterprise", back_populates="targets")
+
+
+class Processor(Base):
+    __tablename__ = "processors"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(255), nullable=False)
+    short_name = Column(String(100))
+    legal_address = Column(String(500))
+    actual_address = Column(String(500))
+    inn = Column(String(12))
+    kpp = Column(String(9))
+    ogrn = Column(String(15))
+    director_name = Column(String(150))
+    phone = Column(String(50))
+    email = Column(String(150))
+    notes = Column(Text)
+
+    enterprise_links = relationship("EnterpriseProcessor", back_populates="processor")
+
+
+class EnterpriseProcessor(Base):
+    __tablename__ = "enterprise_processors"
+
+    id = Column(Integer, primary_key=True)
+    enterprise_id = Column(Integer, ForeignKey("enterprises.id"), nullable=False)
+    processor_id = Column(Integer, ForeignKey("processors.id"), nullable=False)
+    started_at = Column(Date)
+    ended_at = Column(Date)   # NULL = сотрудничество активно
+    notes = Column(Text)
+
+    enterprise = relationship("Enterprise", back_populates="processor_links")
+    processor = relationship("Processor", back_populates="enterprise_links")
 
 
 class File(Base):

@@ -5,6 +5,54 @@ const api = axios.create({
   timeout: 15000,
 });
 
+// Автоматически добавляем JWT-токен в каждый запрос
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem("qm_token");
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
+// При 401 — очищаем токен и редиректим на /login
+api.interceptors.response.use(
+  (r) => r,
+  (err) => {
+    if (err.response?.status === 401) {
+      localStorage.removeItem("qm_token");
+      localStorage.removeItem("qm_user");
+      window.location.href = "/login";
+    }
+    return Promise.reject(err);
+  }
+);
+
+// ── Auth ───────────────────────────────────────────────────────────────────
+
+export const loginApi = (username, password) =>
+  api.post("/auth/login", { username, password }).then((r) => {
+    const d = r.data;
+    return {
+      access_token: d.access_token,
+      user: { id: d.user_id, username: d.username, full_name: d.full_name, role: d.role },
+    };
+  });
+
+export const getMe = () =>
+  api.get("/auth/me").then((r) => r.data);
+
+// ── Users (admin) ──────────────────────────────────────────────────────────
+
+export const getUsers = () =>
+  api.get("/users").then((r) => r.data);
+
+export const createUser = (data) =>
+  api.post("/users", data).then((r) => r.data);
+
+export const updateUser = (id, data) =>
+  api.put(`/users/${id}`, data).then((r) => r.data);
+
+export const deleteUser = (id) =>
+  api.delete(`/users/${id}`).then((r) => r.data);
+
 // ── Enterprises ────────────────────────────────────────────────────────────
 
 export const getEnterprises = (params) =>
@@ -58,6 +106,38 @@ export const updateAudit = (id, data) =>
 
 export const deleteAudit = (id) =>
   api.delete(`/audits/${id}`).then((r) => r.data);
+
+// ── Processors ─────────────────────────────────────────────────────────────
+
+export const getProcessors = (params) =>
+  api.get("/processors", { params }).then((r) => r.data);
+
+export const getProcessor = (id) =>
+  api.get(`/processors/${id}`).then((r) => r.data);
+
+export const createProcessor = (data) =>
+  api.post("/processors", data).then((r) => r.data);
+
+export const updateProcessor = (id, data) =>
+  api.put(`/processors/${id}`, data).then((r) => r.data);
+
+export const deleteProcessor = (id) =>
+  api.delete(`/processors/${id}`).then((r) => r.data);
+
+export const getProcessorEnterprises = (id) =>
+  api.get(`/processors/${id}/enterprises`).then((r) => r.data);
+
+export const addProcessorEnterprise = (id, data) =>
+  api.post(`/processors/${id}/enterprises`, data).then((r) => r.data);
+
+export const updateProcessorEnterprise = (processorId, linkId, data) =>
+  api.put(`/processors/${processorId}/enterprises/${linkId}`, data).then((r) => r.data);
+
+export const deleteProcessorEnterprise = (processorId, linkId) =>
+  api.delete(`/processors/${processorId}/enterprises/${linkId}`).then((r) => r.data);
+
+export const getProcessorDeliveries = (id) =>
+  api.get(`/processors/${id}/deliveries`).then((r) => r.data);
 
 // ── Grades ─────────────────────────────────────────────────────────────────
 

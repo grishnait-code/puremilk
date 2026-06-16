@@ -1,8 +1,6 @@
 import React from "react";
-import { NavLink } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { getEnterprises } from "../api/client";
-import { useEnterprise } from "../context/EnterpriseContext";
+import { NavLink, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 const S = {
   nav: {
@@ -24,25 +22,28 @@ const S = {
   linkActive: {
     color: "#fff", borderBottom: "3px solid #4fc3f7",
   },
-  select: {
+  userZone: {
     marginLeft: "auto",
-    background: "rgba(255,255,255,0.12)",
-    color: "#fff",
-    border: "1px solid rgba(255,255,255,0.25)",
-    borderRadius: 8,
-    padding: "6px 14px",
-    fontSize: 14,
-    fontWeight: 500,
+    display: "flex", alignItems: "center", gap: 12,
+  },
+  userInfo: {
+    fontSize: 13, color: "rgba(255,255,255,0.85)", textAlign: "right",
+    lineHeight: 1.3,
+  },
+  userName: { fontWeight: 600, color: "#fff" },
+  userRole: { fontSize: 11, color: "rgba(255,255,255,0.6)", textTransform: "uppercase", letterSpacing: 0.5 },
+  logoutBtn: {
+    background: "rgba(255,255,255,0.12)", color: "#fff",
+    border: "1px solid rgba(255,255,255,0.25)", borderRadius: 8,
+    padding: "6px 14px", fontSize: 13, fontWeight: 500,
     cursor: "pointer",
-    outline: "none",
-    minWidth: 200,
-    maxWidth: 320,
   },
 };
 
 const links = [
   { to: "/deliveries",      label: "Поставки" },
   { to: "/enterprises",     label: "Предприятия" },
+  { to: "/processors",      label: "Переработчики" },
   { to: "/audits",          label: "Аудиты" },
   { to: "/analytics",       label: "Аналитика" },
   { to: "/grade-standards", label: "Нормативы" },
@@ -50,25 +51,8 @@ const links = [
 ];
 
 export default function Navbar() {
-  const { selectedEnterprise, setSelectedEnterprise } = useEnterprise();
-
-  const { data } = useQuery({
-    queryKey: ["enterprises-nav"],
-    queryFn: () => getEnterprises({ page_size: 100 }),
-    staleTime: 5 * 60_000,
-  });
-
-  const enterprises = data?.items || [];
-
-  const handleChange = (e) => {
-    const id = e.target.value;
-    if (!id) {
-      setSelectedEnterprise(null);
-    } else {
-      const found = enterprises.find((en) => String(en.id) === id);
-      setSelectedEnterprise(found ? { id: found.id, name: found.short_name || found.name } : null);
-    }
-  };
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
   return (
     <nav style={S.nav}>
@@ -90,18 +74,31 @@ export default function Navbar() {
         </NavLink>
       ))}
 
-      <select
-        style={S.select}
-        value={selectedEnterprise?.id ?? ""}
-        onChange={handleChange}
-      >
-        <option value="" style={{ color: "#222", background: "#fff" }}>Все предприятия</option>
-        {enterprises.map((e) => (
-          <option key={e.id} value={e.id} style={{ color: "#222", background: "#fff" }}>
-            {e.short_name || e.name}
-          </option>
-        ))}
-      </select>
+      {user?.role === "admin" && (
+        <NavLink
+          to="/users"
+          style={({ isActive }) =>
+            isActive ? { ...S.link, ...S.linkActive } : S.link
+          }
+        >
+          Пользователи
+        </NavLink>
+      )}
+
+      <div style={S.userZone}>
+        {user && (
+          <div style={S.userInfo}>
+            <div style={S.userName}>{user.full_name || user.username}</div>
+            <div style={S.userRole}>{user.role === "admin" ? "Администратор" : "Пользователь"}</div>
+          </div>
+        )}
+        <button
+          style={S.logoutBtn}
+          onClick={() => { logout(); navigate("/login"); }}
+        >
+          Выйти
+        </button>
+      </div>
     </nav>
   );
 }

@@ -8,7 +8,6 @@ import {
 import {
   getEnterprises, getEnterpriseMonthly, getGradeDecline, compareEnterprises,
 } from "../api/client";
-import { useEnterprise } from "../context/EnterpriseContext";
 import DownloadReportBtn from "../components/DownloadReportBtn";
 
 // ── Константы ──────────────────────────────────────────────────────────────
@@ -89,7 +88,7 @@ function TabDynamics({ enterpriseId }) {
     prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
   );
 
-  if (!enterpriseId) return <div style={S.empty}>Выберите предприятие в навигационной панели</div>;
+  if (!enterpriseId) return <div style={S.empty}>Выберите предприятие выше</div>;
 
   return (
     <div>
@@ -231,7 +230,7 @@ function TabDecline({ enterpriseId }) {
     enabled: !!enterpriseId,
   });
 
-  if (!enterpriseId) return <div style={S.empty}>Выберите предприятие в навигационной панели</div>;
+  if (!enterpriseId) return <div style={S.empty}>Выберите предприятие выше</div>;
 
   const chartData = (data?.periods || []).map((p) => ({
     period: p,
@@ -486,19 +485,30 @@ const TABS = ["Динамика по месяцам", "Причины потер
 
 export default function Analytics() {
   const [activeTab, setActiveTab] = useState(0);
-  const { selectedEnterprise } = useEnterprise();
+  const [enterpriseId, setEnterpriseId] = useState(null);
 
-  const enterpriseId = selectedEnterprise?.id;
+  const { data: entData } = useQuery({
+    queryKey: ["enterprises-nav"],
+    queryFn: () => getEnterprises({ page_size: 200 }),
+    staleTime: 5 * 60_000,
+  });
+  const enterprises = entData?.items || [];
+  const selectedEnterprise = enterprises.find((e) => e.id === enterpriseId);
 
   return (
     <div style={S.page}>
-      <div style={S.header}>
+      <div style={{ ...S.header, flexWrap: "wrap" }}>
         <h1 style={S.title}>Аналитика</h1>
-        {enterpriseId && (
-          <span style={{ fontSize: 14, color: "#666" }}>
-            {selectedEnterprise.name}
-          </span>
-        )}
+        <select
+          style={{ ...S.select, minWidth: 220 }}
+          value={enterpriseId || ""}
+          onChange={(e) => setEnterpriseId(e.target.value ? Number(e.target.value) : null)}
+        >
+          <option value="">— Выберите предприятие —</option>
+          {enterprises.map((e) => (
+            <option key={e.id} value={e.id}>{e.short_name || e.name}</option>
+          ))}
+        </select>
       </div>
 
       <div style={S.tabs}>

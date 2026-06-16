@@ -1,6 +1,6 @@
 # PureMilk — Quality Monitor: Прогресс по задаче
 
-*Обновлено: 12 июня 2026*
+*Обновлено: 16 июня 2026 (сессия 2)*
 
 ---
 
@@ -338,6 +338,60 @@ quality-monitor/
 - Backend (`audits.py`): `_build_audit_with_farm` принимает флаг `superseded`; хелпер `_latest_audit_date_per_farm` определяет самый свежий аудит на ферму; фильтр `overdue_only` применяется после расчёта
 - Frontend (`Audits.jsx`): `isOverdue` берётся из `a.overdue_days` (значение бэкенда), а не вычисляется самостоятельно из `next_audit_date`; количество дней просрочки тоже из `a.overdue_days`
 
+## Что сделано (сессия 16 июня 2026)
+
+### Авторизация — бэкенд
+- Добавлена таблица `users` (миграция `scripts/migrate_auth.sql`)
+- Модель `User` в `backend/app/models.py` — поля: username, full_name, hashed_password, role (admin/user), is_active, created_at
+- `backend/app/config.py` — JWT-настройки: `secret_key`, `algorithm`, `access_token_expire_days` (30 дней)
+- `backend/app/deps.py` — зависимости `get_current_user` (декодирует JWT) и `require_admin` (проверяет роль)
+- `backend/app/routers/auth.py` — `POST /api/auth/login` и `GET /api/auth/me`; passlib bcrypt для хэширования паролей
+- `backend/app/routers/users.py` — CRUD пользователей, только для admin; защита от самоудаления/самоотключения
+- `backend/app/main.py` — `/api/auth/login` публичный, все остальные эндпоинты требуют валидный JWT
+- `scripts/create_admin.py` — создание первого администратора через командную строку
+
+### Авторизация — фронтенд
+- `frontend/src/context/AuthContext.jsx` — React Context с хранением токена и юзера в localStorage (ключи `qm_token`, `qm_user`)
+- `frontend/src/api/client.js` — axios interceptor: автоматически добавляет `Authorization: Bearer <token>` ко всем запросам; при 401 очищает токен и редиректит на `/login`
+- `frontend/src/api/client.js` — добавлены функции: `loginApi`, `getMe`, `getUsers`, `createUser`, `updateUser`, `deleteUser`
+- `frontend/src/pages/Login.jsx` — страница входа с формой логин/пароль, обработкой ошибок
+- `frontend/src/components/ProtectedRoute.jsx` — HOC-компонент: редирект на `/login` если не авторизован; поддерживает `requireAdmin`
+- `frontend/src/App.jsx` — обёрнут в `AuthProvider`; добавлен роут `/login`; все страницы защищены `ProtectedRoute`; `/users` доступен только admin
+- `frontend/src/components/Navbar.jsx` — показывает имя и роль текущего пользователя, кнопку «Выйти»; ссылка «Пользователи» видна только admin
+- `frontend/src/pages/Users.jsx` — страница управления пользователями (только admin): таблица со статусами, модальное окно создания/редактирования, кнопки включить/отключить/удалить
+
+### Порядок первого запуска
+1. `pip install python-jose[cryptography] passlib[bcrypt]` (в окружении backend)
+2. `docker exec -i qm_postgres psql -U postgres -d quality_monitor < scripts\migrate_auth.sql`
+3. `python scripts/create_admin.py --username admin --password <пароль> --name "Имя Фамилия"`
+4. Перезапустить backend
+5. Открыть приложение → появится страница входа
+
+---
+
+## Что сделано (сессия 16 июня 2026, часть 2)
+
+### Раздел «Переработчики»
+- Модели `Processor` и `EnterpriseProcessor` в `backend/app/models.py`
+- Миграция `scripts/migrate_processors.sql` — таблицы `processors` и `enterprise_processors`
+- Роутер `backend/app/routers/processors.py`:
+  - CRUD переработчиков (`GET/POST/PUT/DELETE /api/processors`)
+  - Привязка предприятий (`GET/POST/PUT/DELETE /api/processors/{id}/enterprises`)
+  - История поставок `GET /api/processors/{id}/deliveries` — суммарные объёмы по месяцам и предприятиям
+- `frontend/src/pages/Processors.jsx` — список переработчиков с таблицей и модалом создания
+- `frontend/src/pages/Processor.jsx` — карточка переработчика: реквизиты, список предприятий с датами и статусами, график поставок (stacked bar по месяцам) + итоговая таблица
+- Добавлен в Navbar и App.jsx (роуты `/processors`, `/processor/:id`)
+- Добавлены API-функции в `frontend/src/api/client.js`
+- Применить миграцию: `Get-Content scripts\migrate_processors.sql | docker exec -i qm_postgres psql -U postgres -d quality_monitor`
+
+### Инфраструктура (production)
+- `docker-compose.prod.yml` — production-конфигурация: nginx на порту 80, backend и db без внешних портов
+- `frontend/Dockerfile.prod` — двухэтапная сборка: `npm run build` → nginx раздаёт статику
+- `frontend/nginx.prod.conf` — nginx: SPA-роутинг, реверс-прокси `/api/` → backend, кэширование статики
+- `backend/requirements.txt` — зафиксирован `bcrypt==4.0.1` для совместимости с passlib
+- `.env.prod.example` — шаблон переменных окружения (пароль БД, SECRET_KEY)
+- Запуск: `docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build`
+
 ---
 
 ## TODO
@@ -385,4 +439,4 @@ quality-monitor/
 ---
 
 ### Инфраструктура
-- [ ] Docker Compose — проверить в production-режиме
+- [x] Docker Compose production ✅

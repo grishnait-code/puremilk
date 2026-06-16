@@ -20,11 +20,22 @@ def build_filter_query(db: Session, enterprise_id, date_from, date_to,
                        fatty_acids_min, fatty_acids_max, urea_min, urea_max,
                        clostridium_min, clostridium_max,
                        temp_min=None, temp_max=None,
-                       org_min=None, org_max=None):
+                       org_min=None, org_max=None,
+                       processor_id=None):
     """Строит отфильтрованный запрос для deliveries (переиспользуется в list и stats)."""
     q = db.query(models.Delivery)
     if enterprise_id:
         q = q.filter(models.Delivery.enterprise_id == enterprise_id)
+    elif processor_id:
+        linked_ids = [
+            lnk.enterprise_id for lnk in
+            db.query(models.EnterpriseProcessor)
+            .filter(models.EnterpriseProcessor.processor_id == processor_id).all()
+        ]
+        if linked_ids:
+            q = q.filter(models.Delivery.enterprise_id.in_(linked_ids))
+        else:
+            q = q.filter(False)  # нет привязанных предприятий — пустой результат
     if date_from:
         q = q.filter(models.Delivery.delivery_date >= date_from)
     if date_to:
@@ -115,6 +126,7 @@ def build_delivery_out(d, grade: str | None = None) -> schemas.DeliveryOut:
 @router.get("/stats")
 def get_deliveries_stats(
     enterprise_id: Optional[int] = None,
+    processor_id: Optional[int] = None,
     date_from: Optional[date] = None,
     date_to: Optional[date] = None,
     weight_min: Optional[float] = None, weight_max: Optional[float] = None,
@@ -147,7 +159,7 @@ def get_deliveries_stats(
         alcohol_min, alcohol_max, acidity_min, acidity_max, ph_min, ph_max,
         coliforms_min, coliforms_max, fatty_acids_min, fatty_acids_max,
         urea_min, urea_max, clostridium_min, clostridium_max,
-        temp_min, temp_max, org_min, org_max,
+        temp_min, temp_max, org_min, org_max, processor_id=processor_id,
     )
     delivery_ids = [row.id for row in q.with_entities(models.Delivery.id).all()]
     total = len(delivery_ids)
@@ -180,6 +192,7 @@ def get_deliveries_stats(
 def list_deliveries(
     # Идентификация
     enterprise_id: Optional[int] = None,
+    processor_id: Optional[int] = None,
     date_from: Optional[date] = None,
     date_to: Optional[date] = None,
     weight_min: Optional[float] = None,
@@ -237,7 +250,7 @@ def list_deliveries(
     # Сортировка и пагинация
     ordering: str = Query("-delivery_date"),
     page: int = Query(1, ge=1),
-    page_size: int = Query(25, ge=1, le=100),
+    page_size: int = Query(25, ge=1, le=500),
     db: Session = Depends(get_db),
 ):
     q = (
@@ -249,6 +262,16 @@ def list_deliveries(
     # ── Фильтры по Delivery ────────────────────────────────────────────────
     if enterprise_id:
         q = q.filter(models.Delivery.enterprise_id == enterprise_id)
+    elif processor_id:
+        linked_ids = [
+            lnk.enterprise_id for lnk in
+            db.query(models.EnterpriseProcessor)
+            .filter(models.EnterpriseProcessor.processor_id == processor_id).all()
+        ]
+        if linked_ids:
+            q = q.filter(models.Delivery.enterprise_id.in_(linked_ids))
+        else:
+            q = q.filter(False)
     if date_from:
         q = q.filter(models.Delivery.delivery_date >= date_from)
     if date_to:
