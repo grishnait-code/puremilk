@@ -441,3 +441,28 @@ quality-monitor/
 
 ### Инфраструктура
 - [x] Docker Compose production ✅
+- [x] Деплой на сервер (Yandex Cloud VPS, IP 81.26.181.88) ✅
+- [ ] SSL, домен, автозапуск
+
+---
+
+## Что сделано (сессия 16 июня 2026, часть 4)
+
+### Деплой на production-сервер (Yandex Cloud)
+- Создана VM Ubuntu 24.04, 2vCPU/2GB RAM, IP 81.26.181.88
+- Установлен Docker + docker-compose-v2, склонирован репозиторий
+- Создан `.env.prod` на сервере
+- Запущены контейнеры: `qm_postgres_prod`, `qm_backend_prod`, `qm_frontend_prod`
+- Перенесена база данных: 3339 поставок через `pg_dump --encoding=UTF8`
+- Пересоздан пользователь admin после `DROP SCHEMA` (требовался для чистого импорта)
+- Приложение доступно по адресу http://81.26.181.88
+
+### Исправление кодировки данных (кракозябры)
+- Проблема: при запуске `import_xlsx.py` через PowerShell строковые аргументы
+  (`--enterprise "Название"`) пережили двойное перекодирование UTF-8 → CP866 → UTF-8
+- Диагностика: анализ hex-дампа строк в БД, обнаружен паттерн (каждый байт UTF-8 Кириллицы
+  интерпретирован как CP866-символ и перезаписан в UTF-8)
+- Решение: `name.encode('cp866').decode('utf-8')` — обратная конвертация
+- Исправлены таблицы: `enterprises`, `farms`, `contracts`, `audits`, `processors`,
+  `grades`, `grade_standards`, `targets`, `users`
+- Добавлен скрипт `scripts/fix_encoding.py` для повторного применения
