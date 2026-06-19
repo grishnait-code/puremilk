@@ -1,6 +1,6 @@
 import React, { useState, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { getEnterprises } from "../api/client";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { getEnterprises, createEnterprise } from "../api/client";
 import axios from "axios";
 
 const api = axios.create({ baseURL: "/api" });
@@ -54,6 +54,16 @@ export default function Import() {
   const { data: enterprises } = useQuery({
     queryKey: ["enterprises-nav"],
     queryFn: () => getEnterprises({ page_size: 100 }),
+  });
+
+  const queryClient = useQueryClient();
+  const createEnterpriseMut = useMutation({
+    mutationFn: createEnterprise,
+    onSuccess: (newEnterprise) => {
+      queryClient.invalidateQueries(["enterprises"]);
+      queryClient.invalidateQueries(["enterprises-nav"]);
+      setEnterpriseId(String(newEnterprise.id));
+    },
   });
 
   const handleFile = async (f) => {
@@ -194,6 +204,31 @@ export default function Import() {
               <option key={e.id} value={e.id}>{e.name}</option>
             ))}
           </select>
+          {preview?.enterprise_name && enterprises?.items && !enterprises.items.some(
+            (e) => e.name.toLowerCase() === preview.enterprise_name.toLowerCase() ||
+                   (e.short_name || "").toLowerCase() === preview.enterprise_name.toLowerCase()
+          ) && (
+            <button
+              onClick={() => createEnterpriseMut.mutate({ name: preview.enterprise_name, short_name: preview.enterprise_name })}
+              disabled={createEnterpriseMut.isPending}
+              style={{
+                marginTop: 12,
+                padding: "8px 16px",
+                background: "#e8f0fe",
+                color: "#1a3a5c",
+                border: "1px solid #1a3a5c",
+                borderRadius: 6,
+                cursor: "pointer",
+                fontSize: 13,
+                fontWeight: 600,
+                transition: "all 0.2s"
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "#d2e3fc"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "#e8f0fe"; }}
+            >
+              {createEnterpriseMut.isPending ? "Создание..." : `+ Создать предприятие «${preview.enterprise_name}»`}
+            </button>
+          )}
         </div>
       )}
 
